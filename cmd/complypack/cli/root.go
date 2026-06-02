@@ -14,6 +14,7 @@ func New() *cobra.Command {
 	}
 
 	cmd.AddCommand(catalogCmd())
+	cmd.AddCommand(mcpCmd())
 
 	return cmd
 }
