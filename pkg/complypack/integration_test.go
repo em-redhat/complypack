@@ -21,6 +21,7 @@ func TestIntegrationMemoryStore(t *testing.T) {
 
 	// Pack
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.opa",
 		Version:     "1.0.0",
 		Source: &complypack.Provenance{
@@ -92,6 +93,7 @@ func TestIntegrationFileStore(t *testing.T) {
 
 	// Pack
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.cel",
 		Version:     "2.0.0",
 	}
@@ -128,6 +130,7 @@ func TestIntegrationLargeContent(t *testing.T) {
 	store := memory.New()
 
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.opa",
 		Version:     "1.0.0",
 	}

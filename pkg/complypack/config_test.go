@@ -21,7 +21,8 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "valid minimal config",
 			cfg: complypack.Config{
-				EvaluatorID: "io.complytime.opa",
+				ID:          "io.test.pack",
+				EvaluatorID: "opa",
 				Version:     "1.0.0",
 			},
 			wantErr: false,
@@ -29,7 +30,8 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "valid with provenance",
 			cfg: complypack.Config{
-				EvaluatorID: "io.complytime.opa",
+				ID:          "io.test.pack",
+				EvaluatorID: "opa",
 				Version:     "1.0.0",
 				Source: &complypack.Provenance{
 					GemaraContent: "oci://registry/gemara/controls:latest",
@@ -39,8 +41,17 @@ func TestConfigValidation(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "missing id",
+			cfg: complypack.Config{
+				EvaluatorID: "opa",
+				Version:     "1.0.0",
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing evaluator-id",
 			cfg: complypack.Config{
+				ID:      "io.test.pack",
 				Version: "1.0.0",
 			},
 			wantErr: true,
@@ -48,7 +59,8 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "missing version",
 			cfg: complypack.Config{
-				EvaluatorID: "io.complytime.opa",
+				ID:          "io.test.pack",
+				EvaluatorID: "opa",
 			},
 			wantErr: true,
 		},
@@ -60,7 +72,8 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "provenance with empty gemara-content",
 			cfg: complypack.Config{
-				EvaluatorID: "io.complytime.opa",
+				ID:          "io.test.pack",
+				EvaluatorID: "opa",
 				Version:     "1.0.0",
 				Source: &complypack.Provenance{
 					GemaraContent: "",
@@ -72,7 +85,8 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "provenance with empty policy-id",
 			cfg: complypack.Config{
-				EvaluatorID: "io.complytime.opa",
+				ID:          "io.test.pack",
+				EvaluatorID: "opa",
 				Version:     "1.0.0",
 				Source: &complypack.Provenance{
 					GemaraContent: "oci://registry/gemara/controls:latest",
@@ -97,7 +111,8 @@ func TestConfigValidation(t *testing.T) {
 
 func TestConfigJSON(t *testing.T) {
 	cfg := complypack.Config{
-		EvaluatorID: "io.complytime.opa",
+		ID:          "io.test.pack",
+		EvaluatorID: "opa",
 		Version:     "1.0.0",
 		Source: &complypack.Provenance{
 			GemaraContent: "oci://registry/gemara/controls:latest",
@@ -112,6 +127,7 @@ func TestConfigJSON(t *testing.T) {
 	err = json.Unmarshal(data, &decoded)
 	require.NoError(t, err)
 
+	assert.Equal(t, cfg.ID, decoded.ID)
 	assert.Equal(t, cfg.EvaluatorID, decoded.EvaluatorID)
 	assert.Equal(t, cfg.Version, decoded.Version)
 	require.NotNil(t, decoded.Source)
@@ -121,7 +137,8 @@ func TestConfigJSON(t *testing.T) {
 
 func TestConfigJSONOmitEmpty(t *testing.T) {
 	cfg := complypack.Config{
-		EvaluatorID: "io.complytime.opa",
+		ID:          "io.test.pack",
+		EvaluatorID: "opa",
 		Version:     "1.0.0",
 		Source:      nil,
 	}
@@ -129,7 +146,6 @@ func TestConfigJSONOmitEmpty(t *testing.T) {
 	data, err := json.Marshal(cfg)
 	require.NoError(t, err)
 
-	// Verify source is omitted when nil
 	var raw map[string]interface{}
 	err = json.Unmarshal(data, &raw)
 	require.NoError(t, err)

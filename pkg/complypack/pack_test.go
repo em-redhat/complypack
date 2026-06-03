@@ -21,6 +21,7 @@ func TestPackMinimal(t *testing.T) {
 	store := memory.New()
 
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.opa",
 		Version:     "1.0.0",
 	}
@@ -41,6 +42,7 @@ func TestPackWithProvenance(t *testing.T) {
 	store := memory.New()
 
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.opa",
 		Version:     "1.0.0",
 		Source: &complypack.Provenance{
@@ -61,6 +63,7 @@ func TestPackWithAnnotations(t *testing.T) {
 	store := memory.New()
 
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.opa",
 		Version:     "1.0.0",
 	}
@@ -81,8 +84,21 @@ func TestPackErrors(t *testing.T) {
 	ctx := context.Background()
 	store := memory.New()
 
+	t.Run("invalid config - missing id", func(t *testing.T) {
+		cfg := complypack.Config{
+			EvaluatorID: "opa",
+			Version:     "1.0.0",
+		}
+		content := strings.NewReader("content")
+
+		_, err := complypack.Pack(ctx, store, cfg, content)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "id is required")
+	})
+
 	t.Run("invalid config - empty evaluator-id", func(t *testing.T) {
 		cfg := complypack.Config{
+			ID:      "io.test.pack",
 			Version: "1.0.0",
 		}
 		content := strings.NewReader("content")
@@ -94,7 +110,8 @@ func TestPackErrors(t *testing.T) {
 
 	t.Run("invalid config - empty version", func(t *testing.T) {
 		cfg := complypack.Config{
-			EvaluatorID: "io.complytime.opa",
+			ID:          "io.test.pack",
+			EvaluatorID: "opa",
 		}
 		content := strings.NewReader("content")
 
@@ -105,6 +122,7 @@ func TestPackErrors(t *testing.T) {
 
 	t.Run("empty content", func(t *testing.T) {
 		cfg := complypack.Config{
+			ID:          "io.test.pack",
 			EvaluatorID: "io.complytime.opa",
 			Version:     "1.0.0",
 		}
@@ -116,6 +134,7 @@ func TestPackErrors(t *testing.T) {
 
 	t.Run("content too large", func(t *testing.T) {
 		cfg := complypack.Config{
+			ID:          "io.test.pack",
 			EvaluatorID: "io.complytime.opa",
 			Version:     "1.0.0",
 		}

@@ -34,6 +34,7 @@ type GemaraConfig struct {
 // ComplyPackConfig represents the structure of complypack.yaml.
 // Aligned with CEP-0001 and complypack-pipeline specification.
 type ComplyPackConfig struct {
+	ID          string       `yaml:"id"`
 	EvaluatorID string       `yaml:"evaluator-id"`
 	Version     string       `yaml:"version"`
 	Gemara      GemaraConfig `yaml:"gemara"`
@@ -75,6 +76,22 @@ func (c *ComplyPackConfig) Validate() error {
 		return fmt.Errorf("missing required field: version")
 	}
 
+	// Validate schema entries if present
+	for i, schema := range c.Schemas {
+		if schema.Platform == "" {
+			return fmt.Errorf("schema %d missing required field: platform", i)
+		}
+	}
+
+	return nil
+}
+
+// ValidateForMCP checks fields required for MCP server operation.
+func (c *ComplyPackConfig) ValidateForMCP() error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+
 	if c.Gemara.Source == "" {
 		return fmt.Errorf("missing required field: gemara.source")
 	}
@@ -83,13 +100,21 @@ func (c *ComplyPackConfig) Validate() error {
 		return fmt.Errorf("missing required field: schemas")
 	}
 
-	// Validate each schema has required fields
-	for i, schema := range c.Schemas {
-		if schema.Platform == "" {
-			return fmt.Errorf("schema %d missing required field: platform", i)
-		}
-		// Either source or path must be specified (path is legacy)
-		// If neither is specified, we'll fall back to embedded schemas
+	return nil
+}
+
+// ValidateForPack checks fields required for pack operation.
+func (c *ComplyPackConfig) ValidateForPack() error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+
+	if c.ID == "" {
+		return fmt.Errorf("missing required field: id")
+	}
+
+	if c.EvaluatorID == "" {
+		return fmt.Errorf("missing required field: evaluator-id")
 	}
 
 	return nil

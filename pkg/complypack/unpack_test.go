@@ -20,6 +20,7 @@ func TestUnpackRoundTrip(t *testing.T) {
 
 	// Pack
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.opa",
 		Version:     "1.0.0",
 		Source: &complypack.Provenance{
@@ -71,6 +72,7 @@ func TestUnpackMinimal(t *testing.T) {
 
 	// Pack minimal config
 	cfg := complypack.Config{
+		ID:          "io.test.pack",
 		EvaluatorID: "io.complytime.opa",
 		Version:     "1.0.0",
 	}
