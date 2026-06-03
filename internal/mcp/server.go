@@ -9,8 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"cuelang.org/go/cue/format"
-	"cuelang.org/go/encoding/openapi"
+	"cuelang.org/go/cue"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/complytime/complypack/internal/registry"
@@ -273,30 +272,39 @@ func loadJSONSchemaFromSource(ctx context.Context, source SchemaSource, platform
 	return data, nil
 }
 
-// loadJSONSchemaFromCUE loads a CUE schema and converts it to JSON Schema
-// via the OpenAPI encoding. CUE definitions (e.g., #Workflow) cannot be
-// marshaled directly with MarshalJSON — they require the openapi encoder
-// to produce a valid JSON Schema representation.
+// loadJSONSchemaFromCUE loads a CUE module and serializes its definitions as
+// CUE syntax. Modern CUE modules (e.g., cue.dev/x/githubactions) use validators
+// like matchN and struct.MinFields that have no OpenAPI/JSON Schema equivalent.
+// Serving the CUE syntax directly preserves full fidelity — LLMs can interpret
+// CUE definitions to understand field structure, types, and constraints.
 func loadJSONSchemaFromCUE(ctx context.Context, source SchemaSource, platform string) ([]byte, error) {
 	cueVal, err := loadCUEFromSource(ctx, source, platform)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load CUE schema: %w", err)
 	}
 
-	astFile, err := openapi.Generate(cueVal, &openapi.Config{
-		ExpandReferences: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert CUE to OpenAPI/JSON Schema: %w", err)
+	cueSyntax := formatCUEDefinitions(cueVal)
+	if len(cueSyntax) == 0 {
+		return nil, fmt.Errorf("no definitions found in CUE module for %s", platform)
 	}
 
-	jsonBytes, err := format.Node(astFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to format OpenAPI output: %w", err)
+	slog.Info("loaded CUE schema (serving as CUE syntax)", "platform", platform, "source", source.Path)
+	return cueSyntax, nil
+}
+
+// formatCUEDefinitions extracts top-level definitions from a CUE value and
+// formats them as readable CUE syntax for LLM consumption.
+func formatCUEDefinitions(val cue.Value) []byte {
+	var sb strings.Builder
+
+	iter, _ := val.Fields(cue.Definitions(true))
+	for iter.Next() {
+		label := iter.Selector().String()
+		defVal := iter.Value()
+		fmt.Fprintf(&sb, "%s: %v\n\n", label, defVal)
 	}
 
-	slog.Info("loaded and converted CUE schema to JSON Schema via OpenAPI", "platform", platform, "source", source.Path)
-	return jsonBytes, nil
+	return []byte(sb.String())
 }
 
 // LoadedArtifacts holds raw and parsed artifacts from bundle/file loading.
