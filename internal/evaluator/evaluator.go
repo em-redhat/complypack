@@ -10,7 +10,7 @@ import (
 
 // Evaluator defines the interface for policy-language evaluators.
 type Evaluator interface {
-	// ID returns the unique identifier for this evaluator (e.g., "io.complytime.opa").
+	// ID returns the unique identifier for this evaluator (e.g., "opa").
 	ID() string
 
 	// Validate checks policy syntax and compilation without executing.

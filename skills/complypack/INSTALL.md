@@ -10,26 +10,30 @@ This skill works with any AI agent that can:
 
 ### Using OpenPackage (OPKG)
 
-**Install from GitHub:**
+**Prerequisites:** Package must be published to local registry first:
+
 ```bash
-opkg install gh@complytime/complypack/skills/generating-gemara-policies
+cd /path/to/complypack/skills/generating-gemara-policies
+opkg publish --local
 ```
 
-**Or install locally:**
+**Install for Claude Code:**
 ```bash
-cd /path/to/complypack
-opkg install skills/generating-gemara-policies
+cd /path/to/your/project
+opkg install generating-gemara-policies --platforms claude
 ```
 
-**Interactive selection:**
+**Install for Cursor:**
 ```bash
-opkg install gh@complytime/complypack --interactive
-# Then select: skills > generating-gemara-policies
+opkg install generating-gemara-policies --platforms cursor
 ```
 
-OpenPackage automatically installs to the correct location for your platform (Claude Code, Cursor, Windsurf, etc.).
+**Install for Windsurf:**
+```bash
+opkg install generating-gemara-policies --platforms windsurf
+```
 
-**Learn more:** [OpenPackage Documentation](https://openpackage.dev/docs)
+**Learn more:** [OpenPackage Documentation](https://github.com/enulus/OpenPackage)
 
 ## Manual Installation by Platform
 

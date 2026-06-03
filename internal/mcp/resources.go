@@ -4,23 +4,42 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/complytime/complypack/internal/evaluator"
+	"github.com/gemaraproj/go-gemara"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // ResourceStore manages catalogs and schemas for MCP resource handlers.
+// It holds both raw YAML (for MCP resource serving) and parsed artifacts (for tool handlers).
 type ResourceStore struct {
-	catalogs map[string][]byte
-	schemas  map[string][]byte
+	rawCatalogs map[string][]byte                  // raw YAML for ReadResource
+	catalogs    map[string]*gemara.ControlCatalog  // parsed ControlCatalogs
+	policies    map[string]*gemara.Policy          // parsed Policies
+	effective   map[string]*gemara.EffectivePolicy // resolved policy graphs
+	schemas     map[string][]byte                  // platform JSON schemas
+	evaluators  *evaluator.Registry                // available policy evaluators
 }
 
-// NewResourceStore creates a ResourceStore with the given catalogs and schemas.
-func NewResourceStore(catalogs, schemas map[string][]byte) *ResourceStore {
+// NewResourceStore creates a ResourceStore with raw and parsed artifacts.
+func NewResourceStore(
+	rawCatalogs map[string][]byte,
+	catalogs map[string]*gemara.ControlCatalog,
+	policies map[string]*gemara.Policy,
+	effective map[string]*gemara.EffectivePolicy,
+	schemas map[string][]byte,
+	evaluators *evaluator.Registry,
+) *ResourceStore {
 	return &ResourceStore{
-		catalogs: catalogs,
-		schemas:  schemas,
+		rawCatalogs: rawCatalogs,
+		catalogs:    catalogs,
+		policies:    policies,
+		effective:   effective,
+		schemas:     schemas,
+		evaluators:  evaluators,
 	}
 }
 
@@ -28,8 +47,8 @@ func NewResourceStore(catalogs, schemas map[string][]byte) *ResourceStore {
 func (rs *ResourceStore) ListResources(ctx context.Context) ([]mcp.Resource, error) {
 	var resources []mcp.Resource
 
-	// Add catalog resources
-	for name := range rs.catalogs {
+	// Add catalog resources (from raw catalogs for ReadResource)
+	for name := range rs.rawCatalogs {
 		resources = append(resources, mcp.Resource{
 			URI:      fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeCatalog, name),
 			Name:     fmt.Sprintf("Gemara Catalog: %s", name),
@@ -58,18 +77,20 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 
 	path := strings.TrimPrefix(uri, URIScheme+"://")
 	parts := strings.SplitN(path, "/", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid URI format: %s", uri)
-	}
 
 	resourceType := parts[0]
-	name := parts[1]
 
 	switch resourceType {
+	case ResourceTypeEvaluator:
+		return rs.readEvaluatorResource(uri)
+
 	case ResourceTypeCatalog:
-		data, ok := rs.catalogs[name]
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid URI format: %s", uri)
+		}
+		data, ok := rs.rawCatalogs[parts[1]]
 		if !ok {
-			return nil, fmt.Errorf("catalog %q not found", name)
+			return nil, fmt.Errorf("catalog %q not found", parts[1])
 		}
 		return []*mcp.ResourceContents{{
 			URI:      uri,
@@ -78,9 +99,12 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 		}}, nil
 
 	case ResourceTypeSchema:
-		data, ok := rs.schemas[name]
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid URI format: %s", uri)
+		}
+		data, ok := rs.schemas[parts[1]]
 		if !ok {
-			return nil, fmt.Errorf("schema %q not found", name)
+			return nil, fmt.Errorf("schema %q not found", parts[1])
 		}
 		return []*mcp.ResourceContents{{
 			URI:      uri,
@@ -91,4 +115,37 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
+}
+
+func (rs *ResourceStore) readEvaluatorResource(uri string) ([]*mcp.ResourceContents, error) {
+	if rs.evaluators == nil {
+		return nil, fmt.Errorf("no evaluators available")
+	}
+
+	type evalInfo struct {
+		ID            string `json:"id"`
+		FileExtension string `json:"file_extension"`
+	}
+
+	var evals []evalInfo
+	for _, id := range rs.evaluators.IDs() {
+		e, _ := rs.evaluators.Get(id)
+		evals = append(evals, evalInfo{
+			ID:            e.ID(),
+			FileExtension: e.FileExtension(),
+		})
+	}
+
+	data, err := json.Marshal(map[string]interface{}{
+		"evaluators": evals,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal evaluators: %w", err)
+	}
+
+	return []*mcp.ResourceContents{{
+		URI:      uri,
+		MIMEType: MIMETypeJSON,
+		Text:     string(data),
+	}}, nil
 }

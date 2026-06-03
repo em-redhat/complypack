@@ -1,0 +1,50 @@
+# ComplyPack Configuration Example
+# This file shows all supported schema source types
+
+evaluator-id: io.complytime.opa
+version: 0.1.0
+
+# Gemara catalog source (file path or OCI reference)
+gemara:
+  source: file://./catalogs/my-controls.yaml
+  # OR: source: ghcr.io/org/controls:latest
+
+# Platform schemas - multiple source types supported
+schemas:
+  # CUE registry module (fetches from cue.dev registry)
+  - platform: kubernetes
+    source: cue://cue.dev/x/k8s.io/api/core/v1
+
+  # HTTPS download
+  - platform: terraform
+    source: https://example.com/schemas/terraform.json
+
+  # Local file (JSON or CUE)
+  - platform: docker
+    source: file://./schemas/docker.cue
+
+  # Embedded fallback (no source specified)
+  - platform: ansible
+    # No source = uses embedded schema
+
+  # Legacy path syntax (backward compatible)
+  - platform: ci
+    path: ./schemas/ci.cue
+
+# Optional: policy generation directories
+policies:
+  dir: policies/
+  helpers:
+    - helpers/common.rego
+
+# Optional: test configuration
+tests:
+  dir: tests/
+
+# Optional: test fixtures
+fixtures:
+  dir: fixtures/
+
+# Optional: output directory for generated artifacts
+output:
+  dir: out/

@@ -13,7 +13,7 @@ func TestLoadConfig_ValidConfigWithAllFields(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
-	configContent := `evaluator-id: io.complytime.opa
+	configContent := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: catalogs/nist-800-53.yaml
@@ -39,7 +39,7 @@ output:
 	config, err := LoadConfig(configPath)
 	require.NoError(t, err)
 	assert.NotNil(t, config)
-	assert.Equal(t, "io.complytime.opa", config.EvaluatorID)
+	assert.Equal(t, "opa", config.EvaluatorID)
 	assert.Equal(t, "0.1.0", config.Version)
 	assert.Equal(t, "catalogs/nist-800-53.yaml", config.Gemara.Source)
 	assert.Len(t, config.Schemas, 2)
@@ -56,7 +56,7 @@ func TestLoadConfig_MinimalConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
-	configContent := `evaluator-id: io.complytime.opa
+	configContent := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: catalogs/controls.yaml
@@ -70,7 +70,7 @@ schemas:
 	config, err := LoadConfig(configPath)
 	require.NoError(t, err)
 	assert.NotNil(t, config)
-	assert.Equal(t, "io.complytime.opa", config.EvaluatorID)
+	assert.Equal(t, "opa", config.EvaluatorID)
 	assert.Equal(t, "0.1.0", config.Version)
 	assert.Equal(t, "catalogs/controls.yaml", config.Gemara.Source)
 	assert.Len(t, config.Schemas, 1)
@@ -78,7 +78,7 @@ schemas:
 	assert.Nil(t, config.Tests)
 }
 
-func TestLoadConfig_MissingEvaluatorID(t *testing.T) {
+func TestLoadConfig_OptionalEvaluatorID(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
@@ -93,16 +93,16 @@ schemas:
 	require.NoError(t, err)
 
 	config, err := LoadConfig(configPath)
-	assert.Error(t, err)
-	assert.Nil(t, config)
-	assert.Contains(t, err.Error(), "evaluator-id")
+	require.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.Empty(t, config.EvaluatorID)
 }
 
 func TestLoadConfig_MissingVersion(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
-	configContent := `evaluator-id: io.complytime.opa
+	configContent := `evaluator-id: opa
 gemara:
   source: catalogs/controls.yaml
 schemas:
@@ -122,7 +122,7 @@ func TestLoadConfig_MissingGemaraSource(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
-	configContent := `evaluator-id: io.complytime.opa
+	configContent := `evaluator-id: opa
 version: 0.1.0
 schemas:
   - path: schemas/kubernetes.cue
@@ -141,7 +141,7 @@ func TestLoadConfig_MissingSchemas(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
-	configContent := `evaluator-id: io.complytime.opa
+	configContent := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: catalogs/controls.yaml
@@ -159,7 +159,7 @@ func TestLoadConfig_SchemaMissingPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
-	configContent := `evaluator-id: io.complytime.opa
+	configContent := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: catalogs/controls.yaml
@@ -169,17 +169,18 @@ schemas:
 	err := os.WriteFile(configPath, []byte(configContent), 0600)
 	require.NoError(t, err)
 
+	// Schema without source/path is valid - uses embedded schema
 	config, err := LoadConfig(configPath)
-	assert.Error(t, err)
-	assert.Nil(t, config)
-	assert.Contains(t, err.Error(), "path")
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.Equal(t, "kubernetes", config.Schemas[0].Platform)
 }
 
 func TestLoadConfig_SchemaMissingPlatform(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "complypack.yaml")
 
-	configContent := `evaluator-id: io.complytime.opa
+	configContent := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: catalogs/controls.yaml

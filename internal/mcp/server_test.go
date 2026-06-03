@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/schemas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ func TestNewServer(t *testing.T) {
 
 		// Create config file
 		configPath := filepath.Join(t.TempDir(), "complypack.yaml")
-		configYAML := `evaluator-id: io.complytime.opa
+		configYAML := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: ` + filepath.Join(ociStore, "controls-v1", "catalog.yaml") + `
@@ -45,14 +46,13 @@ schemas:
 			ConfigPath: configPath,
 			OCIStore:   ociStore,
 			CacheDir:   cacheDir,
-			PlainHTTP:  true,
 		})
 
 		require.NoError(t, err)
 		require.NotNil(t, srv)
 
 		// Verify resource store has catalog
-		store := srv.resourceStore
+		store := srv.ResourceStore
 		require.NotNil(t, store)
 		assert.Len(t, store.catalogs, 1)
 		assert.Contains(t, store.catalogs, "controls-v1")
@@ -67,7 +67,7 @@ schemas:
 		ociStore := t.TempDir()
 
 		configPath := filepath.Join(t.TempDir(), "complypack.yaml")
-		configYAML := `evaluator-id: io.complytime.opa
+		configYAML := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: /nonexistent/catalog.yaml
@@ -82,15 +82,14 @@ schemas:
 			ConfigPath: configPath,
 			OCIStore:   ociStore,
 			CacheDir:   cacheDir,
-			PlainHTTP:  true,
 		})
 
 		assert.Error(t, err)
 		assert.Nil(t, srv)
-		assert.Contains(t, err.Error(), "failed to read catalog")
+		assert.Contains(t, err.Error(), "failed to load artifacts")
 	})
 
-	t.Run("error when platform unsupported", func(t *testing.T) {
+	t.Run("skip unknown platform without error", func(t *testing.T) {
 		cacheDir := t.TempDir()
 		ociStore := t.TempDir()
 
@@ -99,7 +98,7 @@ schemas:
 		})
 
 		configPath := filepath.Join(t.TempDir(), "complypack.yaml")
-		configYAML := `evaluator-id: io.complytime.opa
+		configYAML := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: ` + filepath.Join(ociStore, "controls-v1", "catalog.yaml") + `
@@ -114,12 +113,10 @@ schemas:
 			ConfigPath: configPath,
 			OCIStore:   ociStore,
 			CacheDir:   cacheDir,
-			PlainHTTP:  true,
 		})
 
-		assert.Error(t, err)
-		assert.Nil(t, srv)
-		assert.Contains(t, err.Error(), "unsupported platform")
+		assert.NoError(t, err)
+		assert.NotNil(t, srv)
 	})
 
 	// Removed: duplicate catalog test - no longer applicable with single source config
@@ -169,8 +166,16 @@ func TestExtractCatalogName(t *testing.T) {
 }
 
 func TestLoadSchemas(t *testing.T) {
+	ctx := context.Background()
+
+	// Create schema refs for all built-in platforms (no source = use embedded)
+	var refs []config.SchemaRef
+	for _, platform := range schemas.BuiltInPlatforms {
+		refs = append(refs, config.SchemaRef{Platform: platform})
+	}
+
 	t.Run("loads all built-in schemas", func(t *testing.T) {
-		schemaMap, err := loadSchemas()
+		schemaMap, err := loadSchemas(ctx, refs)
 		require.NoError(t, err)
 		require.NotNil(t, schemaMap)
 
@@ -182,7 +187,7 @@ func TestLoadSchemas(t *testing.T) {
 	})
 
 	t.Run("schema content is valid JSON", func(t *testing.T) {
-		schemaMap, err := loadSchemas()
+		schemaMap, err := loadSchemas(ctx, refs)
 		require.NoError(t, err)
 
 		for platform, data := range schemaMap {
@@ -213,8 +218,8 @@ func createMockCatalogBundle(t *testing.T, baseDir, bundleName string, files map
 // mockControlsCatalog is a minimal valid Gemara control catalog for testing.
 const mockControlsCatalog = `metadata:
   id: controls-v1
-  version: 1.0.0
-  gemara-version: 0.20.0
+  type: ControlCatalog
+  gemara-version: "1.0.0"
 controls:
   - id: AC-1
     title: Access Control Policy

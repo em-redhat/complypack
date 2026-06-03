@@ -1,6 +1,7 @@
-name: generating-gemara-policies
-version: 1.0.0
-description: Generate Rego policies from Gemara control catalogs for OPA or Conftest validation
+name: complypack
+version: 2.0.0
+type: skill
+description: Generate policies from Gemara catalogs and extract assessment requirements with ComplyPack MCP server
 author: Jennifer Power
 license: Apache-2.0
 
@@ -18,6 +19,11 @@ keywords:
   - kubernetes
   - terraform
   - docker
+  - complypack
+
+files:
+  - "skills/SKILL.md"
+  - "INSTALL.md"
 
 # Optional MCP server dependency
 mcp:

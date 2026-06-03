@@ -13,7 +13,6 @@ func New() *cobra.Command {
 		SilenceUsage:  true,
 	}
 
-	cmd.AddCommand(catalogCmd())
 	cmd.AddCommand(mcpCmd())
 
 	return cmd

@@ -1,9 +1,9 @@
 ---
-name: generating-gemara-policies
-description: Use when generating Rego policies from Gemara control catalogs for OPA or Conftest validation, targeting platforms like Kubernetes, Terraform, Docker, Ansible, or CI
+name: complypack
+description: Use when user mentions complypack, wants to generate Rego policies from Gemara catalogs, extract assessment requirements and parameters, or work with compliance validation for Kubernetes, Terraform, Docker, Ansible, or CI platforms
 ---
 
-# Generating Gemara Policies
+# ComplyPack: Gemara Policy Generation and Assessment
 
 ## Overview
 
@@ -29,11 +29,12 @@ Do NOT use for:
 | Step | Action | Output |
 |------|--------|--------|
 | 1. Read control | Get definition from catalog (MCP/file/API) | Control text, ID, title |
-| 2. Read schema | Get platform schema (MCP/file) | JSON Schema or CUE |
-| 3. Choose format | OPA (allow) or Conftest (deny) | Policy structure |
-| 4. Generate policy | Write Rego with control mapping | .rego file |
-| 5. Write to disk | Save to `policy/` or user-specified path | File on disk |
-| 6. Verify | Test with sample input | Pass/fail results |
+| 2. Get parameters | Extract assessment requirements with test parameters | Thresholds, values, tools |
+| 3. Read schema | Get platform schema (MCP/file) | JSON Schema or CUE |
+| 4. Choose format | OPA (allow) or Conftest (deny) | Policy structure |
+| 5. Generate policy | Write Rego with control mapping and parameters | .rego file |
+| 6. Write to disk | Save to `policy/` or user-specified path | File on disk |
+| 7. Verify | Test with sample input | Pass/fail results |
 
 ## The Process
 
@@ -57,7 +58,57 @@ Do NOT use for:
 
 **Critical:** The control definition is your requirements specification. Don't improvise.
 
-### Step 2: Read Platform Schema
+### Step 2: Get Assessment Requirements and Parameters
+
+**IMPORTANT:** Assessment requirements contain test parameters, thresholds, and approved tools.
+
+**If ComplyPack MCP server available AND catalog is a Policy:**
+```
+Use get_assessment_requirements tool:
+{
+  "catalogName": "policy-name",
+  "controlId": "CTL-XXX-001"  // optional filter
+}
+
+Returns:
+- Structured parameters from Policy.Adherence.AssessmentPlans
+- Parameter labels, descriptions, accepted values
+- Tool mentions (ToolA, ToolB, etc.)
+- File patterns (.gitlab-ci.yml, Jenkinsfile)
+```
+
+**What you get:**
+- `Parameters` - Structured test values from assessment plans (e.g., {"timeout": "60"})
+- `Tools` - Approved tools mentioned (ToolA, ToolB, ToolC)
+- `TestValues` - Algorithms, config files, permissions patterns
+- `Text` - Full requirement text for context
+
+**Example:**
+```json
+{
+  "id": "CTL-DATA-001-AR3",
+  "control_id": "CTL-DATA-001",
+  "text": "Certificate validity must not exceed maximum",
+  "parameters": {
+    "max_validity_days": "90",
+    "max_validity_days_description": "Maximum certificate lifetime"
+  },
+  "tools": [],
+  "test_values": []
+}
+```
+
+**Use these parameters in your policy:**
+- Thresholds → Use exact values in comparisons
+- Tools → Reference in validation logic
+- Accepted values → Use in allow/deny rules
+
+**If catalog is a ControlCatalog (not Policy):**
+- Assessment requirements exist but parameters are not attached
+- You'll get requirement text and hints (tools, patterns)
+- No structured parameter values
+
+### Step 3: Read Platform Schema
 
 Understand what data structure the policy will evaluate.
 
@@ -73,7 +124,7 @@ ReadMcpResourceTool(server="complypack", uri="complypack://schema/{platform}")
 - Data types and structure
 - What's actually in the input
 
-### Step 3: Choose Policy Format
+### Step 4: Choose Policy Format
 
 **Ask user if unclear**, otherwise use this decision tree:
 
@@ -116,7 +167,7 @@ violations[msg] {
 }
 ```
 
-### Step 4: Generate the Policy
+### Step 5: Generate the Policy
 
 Map control requirements to platform-specific checks:
 
@@ -144,7 +195,7 @@ import rego.v1
 - Write clear violation messages
 - Include both positive checks (what must exist) and negative checks (what must not)
 
-### Step 5: Write to Disk
+### Step 6: Write to Disk
 
 **DO NOT just output to chat.** Policies must be saved to files.
 
@@ -167,7 +218,7 @@ policies/
 - Project structure is unclear
 - Multiple controls being generated
 
-### Step 6: Verify Policy Works
+### Step 7: Verify Policy Works
 
 **Critical step - don't skip this.**
 
@@ -231,24 +282,49 @@ opa eval --data policy.rego --input input.json "data.{package}.allow"
 
 ## Example Workflow
 
-User: "Generate policy for AC-1 targeting Kubernetes using Conftest"
+User: "Generate policy for CTL-DATA-001-AR3 from my-security-policy targeting Kubernetes"
 
 **Steps:**
-1. ✅ Read control: `ReadMcpResourceTool(server="complypack", uri="complypack://catalog/sample-controls")`
-2. ✅ Extract AC-1 text: "Develop, document, and disseminate access control policy"
-3. ✅ Read schema: `ReadMcpResourceTool(server="complypack", uri="complypack://schema/kubernetes")`
-4. ✅ Note schema fields: metadata.annotations, spec.securityContext, etc.
-5. ✅ Generate Conftest policy with deny[] rules
-6. ✅ Write to `policy/ac-1.rego`
-7. ✅ Create test input (Deployment YAML)
-8. ✅ Run: `conftest test test-deployment.yaml -p policy/`
-9. ✅ Report: "Policy written to policy/ac-1.rego. Tested against sample Deployment - detects 2 violations."
+1. ✅ Read control: `ReadMcpResourceTool(server="complypack", uri="complypack://catalog/my-security-policy")`
+2. ✅ Extract CTL-DATA-001 requirements text
+3. ✅ Get parameters: `get_assessment_requirements({catalogName: "my-security-policy", controlId: "CTL-DATA-001"})`
+4. ✅ Extract parameter: `{"max_validity_days": "90"}` from assessment plan
+5. ✅ Read schema: `ReadMcpResourceTool(server="complypack", uri="complypack://schema/kubernetes")`
+6. ✅ Note schema fields: spec.tls.secretName, spec.tls.hosts
+7. ✅ Generate OPA policy using `max_validity_days` parameter
+8. ✅ Write to `policy/ctl-data-001-ar3.rego`
+9. ✅ Create test input (Ingress with cert)
+10. ✅ Run: `conftest test test-ingress.yaml -p policy/`
+11. ✅ Report: "Policy enforces 90-day cert validity. Tested against sample Ingress."
+
+**Example policy using parameters:**
+```rego
+package kubernetes.ctl_data_001_ar3
+
+import rego.v1
+
+# CTL-DATA-001-AR3: Certificate validity
+# Parameters from assessment plan: max_validity_days = 90
+
+deny[msg] {
+    cert := input.spec.tls[_]
+    cert_days := get_cert_validity_days(cert.secretName)
+    
+    # Use parameter from assessment plan
+    max_days := 90
+    cert_days > max_days
+    
+    msg := sprintf("Certificate %s exceeds maximum validity of %d days", 
+                   [cert.secretName, max_days])
+}
+```
 
 **NOT:**
-1. ❌ Generate AC-1 policy from general knowledge of access control
-2. ❌ Output policy in chat only
-3. ❌ Skip testing
-4. ❌ Say "done" without verification
+1. ❌ Generate policy from general knowledge
+2. ❌ Hardcode generic value when parameter is specified
+3. ❌ Skip get_assessment_requirements step
+4. ❌ Output policy in chat only
+5. ❌ Skip testing
 
 ## Multi-Control Generation
 

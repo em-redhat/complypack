@@ -14,7 +14,7 @@ import (
 
 func TestOPA_ID(t *testing.T) {
 	opa := &OPA{}
-	assert.Equal(t, "io.complytime.opa", opa.ID())
+	assert.Equal(t, "opa", opa.ID())
 }
 
 func TestOPA_Validate(t *testing.T) {
