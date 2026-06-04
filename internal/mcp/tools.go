@@ -3,74 +3,53 @@
 package mcp
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 
+	"cuelang.org/go/cue"
 	"github.com/complytime/complypack/internal/evaluator"
-	"github.com/complytime/complypack/schemas"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/santhosh-tekuri/jsonschema/v5"
 )
 
-// validateTestDataAgainstSchema validates test data against JSON Schema.
+// validateTestDataAgainstSchema validates test data against the compiled CUE
+// schema. Uses CUE unification so validation works regardless of whether the
+// schema was loaded from embedded JSON Schema, a CUE file, or a CUE module.
 func validateTestDataAgainstSchema(testData map[string]interface{}, platform string, store *ResourceStore) []string {
-	// Validate platform
-	uri := fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeSchema, platform)
-
-	// Get schema bytes from store
-	ctx := context.Background()
-	contents, err := store.ReadResource(ctx, uri)
+	schema, err := store.CUESchema(platform)
 	if err != nil {
-		return []string{fmt.Sprintf("unsupported platform %q (available: %v)", platform, schemas.BuiltInPlatforms)}
+		return []string{fmt.Sprintf("unsupported platform %q: %v", platform, err)}
 	}
 
-	if len(contents) == 0 {
-		return []string{"schema not found"}
+	cueCtx := schema.Context()
+	dataVal := cueCtx.Encode(testData)
+	if dataVal.Err() != nil {
+		return []string{fmt.Sprintf("failed to encode test data: %v", dataVal.Err())}
 	}
 
-	// Compile schema
-	compiler := jsonschema.NewCompiler()
-	schemaURL := fmt.Sprintf("schema://%s", platform)
-	schemaReader := bytes.NewReader([]byte(contents[0].Text))
-	if err := compiler.AddResource(schemaURL, schemaReader); err != nil {
-		return []string{fmt.Sprintf("failed to compile schema: %v", err)}
-	}
-
-	schema, err := compiler.Compile(schemaURL)
-	if err != nil {
-		return []string{fmt.Sprintf("failed to compile schema: %v", err)}
-	}
-
-	// Validate test data
-	if err := schema.Validate(testData); err != nil {
-		var validationErrors []string
-		if valErr, ok := err.(*jsonschema.ValidationError); ok {
-			validationErrors = collectValidationErrors(valErr)
-		} else {
-			validationErrors = []string{err.Error()}
-		}
-		return validationErrors
+	unified := schema.Unify(dataVal)
+	if err := unified.Validate(cue.Concrete(true)); err != nil {
+		return collectCUEErrors(err)
 	}
 
 	return nil
 }
 
-// collectValidationErrors recursively collects validation error messages.
-func collectValidationErrors(err *jsonschema.ValidationError) []string {
+// collectCUEErrors extracts individual error messages from a CUE error,
+// which may wrap multiple validation failures.
+func collectCUEErrors(err error) []string {
+	type errorList interface {
+		Unwrap() []error
+	}
+
 	var errors []string
-
-	// Add this error's message
-	if err.Message != "" {
-		errors = append(errors, fmt.Sprintf("%s: %s", err.InstanceLocation, err.Message))
+	if el, ok := err.(errorList); ok {
+		for _, e := range el.Unwrap() {
+			errors = append(errors, e.Error())
+		}
+	} else {
+		errors = append(errors, err.Error())
 	}
-
-	// Recursively collect from causes
-	for _, cause := range err.Causes {
-		errors = append(errors, collectValidationErrors(cause)...)
-	}
-
 	return errors
 }
 
@@ -78,7 +57,7 @@ func collectValidationErrors(err *jsonschema.ValidationError) []string {
 func createValidatePolicyTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name:        "validate_policy",
-		Description: "Validate policy syntax, contract compliance against platform schema, and linting. Read complypack://evaluator to discover available evaluators.",
+		Description: "Validate policy syntax, contract compliance against platform schema, and linting. Read complypack://schema to discover available platforms. Read complypack://evaluator to discover available evaluators.",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -88,7 +67,7 @@ func createValidatePolicyTool() *mcp.Tool {
 				},
 				"platform": map[string]interface{}{
 					"type":        "string",
-					"description": "Target platform for contract validation",
+					"description": "Target platform for contract validation. Read complypack://schema for available platforms.",
 				},
 				"evaluator": map[string]interface{}{
 					"type":        "string",
@@ -104,7 +83,7 @@ func createValidatePolicyTool() *mcp.Tool {
 func createTestPolicyTool() *mcp.Tool {
 	return &mcp.Tool{
 		Name:        "test_policy",
-		Description: "Validate test data against platform schema, then execute policy tests. Read complypack://evaluator to discover available evaluators.",
+		Description: "Validate test data against platform schema, then execute policy tests. Read complypack://schema to discover available platforms. Read complypack://evaluator to discover available evaluators.",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -118,7 +97,7 @@ func createTestPolicyTool() *mcp.Tool {
 				},
 				"platform": map[string]interface{}{
 					"type":        "string",
-					"description": "Target platform for test data validation",
+					"description": "Target platform for test data validation. Read complypack://schema for available platforms.",
 				},
 				"evaluator": map[string]interface{}{
 					"type":        "string",
@@ -279,7 +258,7 @@ func handleValidatePolicy(store *ResourceStore) mcp.ToolHandler {
 		var lintWarnings []evaluator.LintWarning
 
 		if len(syntaxErrs) == 0 {
-			schema, err := loadCUESchemaForPlatform(input.Platform)
+			schema, err := store.CUESchema(input.Platform)
 			if err != nil {
 				return nil, err
 			}

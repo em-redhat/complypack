@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "complypack": {
+      "command": "complypack",
+      "args": ["mcp", "serve", "--config", "complypack.yaml"]
+    }
+  }
+}

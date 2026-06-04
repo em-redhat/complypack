@@ -28,15 +28,14 @@ func TestNewServer(t *testing.T) {
 			"catalog.yaml": mockControlsCatalog,
 		})
 
-		// Create config file
+		// Create config file (no schema source = use embedded)
 		configPath := filepath.Join(t.TempDir(), "complypack.yaml")
 		configYAML := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: ` + filepath.Join(ociStore, "controls-v1", "catalog.yaml") + `
 schemas:
-  - path: schemas/kubernetes.cue
-    platform: kubernetes
+  - platform: kubernetes
 `
 		err := os.WriteFile(configPath, []byte(configYAML), 0600)
 		require.NoError(t, err)
@@ -89,7 +88,7 @@ schemas:
 		assert.Contains(t, err.Error(), "failed to load artifacts")
 	})
 
-	t.Run("skip unknown platform without error", func(t *testing.T) {
+	t.Run("fail fast when configured schema source cannot be loaded", func(t *testing.T) {
 		cacheDir := t.TempDir()
 		ociStore := t.TempDir()
 
@@ -115,8 +114,9 @@ schemas:
 			CacheDir:   cacheDir,
 		})
 
-		assert.NoError(t, err)
-		assert.NotNil(t, srv)
+		assert.Error(t, err)
+		assert.Nil(t, srv)
+		assert.Contains(t, err.Error(), "failed to load schemas")
 	})
 
 	// Removed: duplicate catalog test - no longer applicable with single source config
@@ -174,25 +174,26 @@ func TestLoadSchemas(t *testing.T) {
 		refs = append(refs, config.SchemaRef{Platform: platform})
 	}
 
-	t.Run("loads all built-in schemas", func(t *testing.T) {
-		schemaMap, err := loadSchemas(ctx, refs)
+	t.Run("loads all built-in schemas with CUE values", func(t *testing.T) {
+		schemaMap, cueSchemaMap, err := loadSchemas(ctx, refs)
 		require.NoError(t, err)
 		require.NotNil(t, schemaMap)
+		require.NotNil(t, cueSchemaMap)
 
-		// Verify all built-in platforms are present
 		for _, platform := range schemas.BuiltInPlatforms {
 			assert.Contains(t, schemaMap, platform, "missing schema for platform %s", platform)
 			assert.NotEmpty(t, schemaMap[platform])
+			assert.Contains(t, cueSchemaMap, platform, "missing CUE schema for platform %s", platform)
+			assert.True(t, cueSchemaMap[platform].Exists(), "CUE schema for %s should exist", platform)
 		}
 	})
 
 	t.Run("schema content is valid JSON", func(t *testing.T) {
-		schemaMap, err := loadSchemas(ctx, refs)
+		schemaMap, _, err := loadSchemas(ctx, refs)
 		require.NoError(t, err)
 
 		for platform, data := range schemaMap {
 			assert.NotEmpty(t, data, "empty schema for platform %s", platform)
-			// Basic validation: should start with { or [
 			trimmed := strings.TrimSpace(string(data))
 			assert.True(t, strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "["),
 				"schema for %s doesn't look like JSON", platform)

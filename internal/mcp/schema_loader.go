@@ -18,13 +18,9 @@ import (
 	"github.com/complytime/complypack/schemas"
 )
 
-// loadCUESchemaForPlatform loads the CUE schema for a platform from embedded schemas.
-func loadCUESchemaForPlatform(platform string) (cue.Value, error) {
-	return loadEmbeddedCUESchema(platform)
-}
-
-// loadCUEFromSource loads a CUE schema from a parsed source.
-func loadCUEFromSource(ctx context.Context, source SchemaSource, platform string) (cue.Value, error) {
+// LoadCUEFromSource loads a CUE schema from a parsed source.
+// Exported so pack validation can use the same schema loading path.
+func LoadCUEFromSource(ctx context.Context, source SchemaSource, platform string) (cue.Value, error) {
 	switch source.Type {
 	case SourceTypeCUEModule:
 		return loadFromCUERegistry(ctx, source.Path)

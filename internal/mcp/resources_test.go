@@ -21,11 +21,11 @@ func TestResourceStore_ListResources(t *testing.T) {
 		"terraform":  []byte(`{"components": {}}`),
 	}
 
-	store := NewResourceStore(catalogs, nil, nil, nil, schemas, nil)
+	store := NewResourceStore(catalogs, nil, nil, nil, schemas, nil, nil)
 	resources, err := store.ListResources(context.Background())
 	require.NoError(t, err)
 
-	assert.Len(t, resources, 4, "should have 2 catalogs + 2 schemas")
+	assert.Len(t, resources, 5, "should have 2 catalogs + 1 schema list + 2 schemas")
 
 	// Check catalog URIs
 	catalogURIs := []string{}
@@ -37,7 +37,17 @@ func TestResourceStore_ListResources(t *testing.T) {
 	assert.Contains(t, catalogURIs, "complypack://catalog/controls-v1")
 	assert.Contains(t, catalogURIs, "complypack://catalog/security-v2")
 
-	// Check schema URIs
+	// Check schema list resource
+	var hasSchemaList bool
+	for _, r := range resources {
+		if r.URI == "complypack://schema" {
+			hasSchemaList = true
+			assert.Equal(t, MIMETypeJSON, r.MIMEType)
+		}
+	}
+	assert.True(t, hasSchemaList, "should have schema list resource")
+
+	// Check per-platform schema URIs
 	schemaURIs := []string{}
 	for _, r := range resources {
 		if r.MIMEType == MIMETypeJSONSchema {
@@ -57,7 +67,7 @@ func TestResourceStore_ReadResource(t *testing.T) {
 		"kubernetes": []byte(`{"components": {}}`),
 	}
 
-	store := NewResourceStore(catalogs, nil, nil, nil, schemas, nil)
+	store := NewResourceStore(catalogs, nil, nil, nil, schemas, nil, nil)
 
 	tests := []struct {
 		name     string
@@ -94,6 +104,14 @@ func TestResourceStore_ReadResource(t *testing.T) {
 			wantErr: true,
 		},
 	}
+
+	t.Run("schema list resource", func(t *testing.T) {
+		contents, err := store.ReadResource(context.Background(), "complypack://schema")
+		require.NoError(t, err)
+		require.Len(t, contents, 1)
+		assert.Equal(t, MIMETypeJSON, contents[0].MIMEType)
+		assert.Contains(t, contents[0].Text, "kubernetes")
+	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

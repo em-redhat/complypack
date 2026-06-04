@@ -57,10 +57,8 @@ version: 0.1.0
 gemara:
   source: ` + catalogPath + `
 schemas:
-  - path: schemas/kubernetes.cue
-    platform: kubernetes
-  - path: schemas/terraform.cue
-    platform: terraform
+  - platform: kubernetes
+  - platform: terraform
 `
 		err = os.WriteFile(configPath, []byte(configContent), 0600)
 		Expect(err).NotTo(HaveOccurred())
@@ -103,8 +101,7 @@ version: 0.1.0
 gemara:
   source: /nonexistent/catalog.yaml
 schemas:
-  - path: schemas/kubernetes.cue
-    platform: kubernetes
+  - platform: kubernetes
 `
 			err := os.WriteFile(badConfigPath, []byte(badConfigContent), 0600)
 			Expect(err).NotTo(HaveOccurred())
@@ -120,10 +117,10 @@ schemas:
 			Expect(err.Error()).To(ContainSubstring("failed to load artifacts"))
 		})
 
-		It("should skip unknown platform without failing", func() {
-			unknownConfigPath := filepath.Join(tempDir, "unknown-platform-config.yaml")
+		It("should fail fast when configured schema source cannot be loaded", func() {
+			badSchemaConfigPath := filepath.Join(tempDir, "bad-schema-config.yaml")
 			catalogPath := filepath.Join(catalogDir, "test-catalog.yaml")
-			unknownConfigContent := `evaluator-id: opa
+			badSchemaConfigContent := `evaluator-id: opa
 version: 0.1.0
 gemara:
   source: ` + catalogPath + `
@@ -131,17 +128,18 @@ schemas:
   - path: schemas/invalid.cue
     platform: unsupported-platform
 `
-			err := os.WriteFile(unknownConfigPath, []byte(unknownConfigContent), 0600)
+			err := os.WriteFile(badSchemaConfigPath, []byte(badSchemaConfigContent), 0600)
 			Expect(err).NotTo(HaveOccurred())
 
 			opts := &mcp.ServerOptions{
-				ConfigPath: unknownConfigPath,
+				ConfigPath: badSchemaConfigPath,
 				CacheDir:   filepath.Join(tempDir, "cache"),
 			}
 
 			server, err := mcp.NewServer(ctx, opts)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(server).NotTo(BeNil())
+			Expect(err).To(HaveOccurred())
+			Expect(server).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("failed to load schemas"))
 		})
 
 		// Removed: duplicate catalog test - no longer applicable with single source config
@@ -182,7 +180,7 @@ controls:
 				"kubernetes": []byte(`{"type": "object"}`),
 			}
 
-			store = mcp.NewResourceStore(catalogs, nil, nil, nil, schemas, nil)
+			store = mcp.NewResourceStore(catalogs, nil, nil, nil, schemas, nil, nil)
 		})
 
 		It("should list all catalog and schema resources", func() {
@@ -220,7 +218,7 @@ controls:
 			Expect(err).NotTo(HaveOccurred())
 			Expect(contents).NotTo(BeEmpty())
 			Expect(contents[0].URI).To(Equal(uri))
-			Expect(contents[0].MIMEType).To(Equal("application/json"))
+			Expect(contents[0].MIMEType).To(Equal("application/schema+json"))
 			Expect(contents[0].Text).NotTo(BeEmpty())
 		})
 
@@ -287,7 +285,7 @@ controls:
 			schemas := map[string][]byte{
 				"kubernetes": []byte(`{"type": "object"}`),
 			}
-			store := mcp.NewResourceStore(catalogs, nil, nil, nil, schemas, nil)
+			store := mcp.NewResourceStore(catalogs, nil, nil, nil, schemas, nil, nil)
 
 			// List resources
 			resources, err := store.ListResources(ctx)
@@ -327,7 +325,7 @@ controls:
 			schemas := map[string][]byte{
 				"kubernetes": []byte(`{"type": "object", "properties": {"kind": {"type": "string"}}}`),
 			}
-			store := mcp.NewResourceStore(map[string][]byte{}, nil, nil, nil, schemas, nil)
+			store := mcp.NewResourceStore(map[string][]byte{}, nil, nil, nil, schemas, nil, nil)
 
 			// List resources
 			resources, err := store.ListResources(ctx)
@@ -336,7 +334,7 @@ controls:
 			// Find schema resource
 			var schemaURI string
 			for _, res := range resources {
-				if res.MIMEType == "application/json" && res.Name == "Platform Schema: kubernetes" {
+				if res.MIMEType == "application/schema+json" && res.Name == "Platform Schema: kubernetes" {
 					schemaURI = res.URI
 					break
 				}
@@ -347,7 +345,7 @@ controls:
 			contents, err := store.ReadResource(ctx, schemaURI)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(contents).NotTo(BeEmpty())
-			Expect(contents[0].MIMEType).To(Equal("application/json"))
+			Expect(contents[0].MIMEType).To(Equal("application/schema+json"))
 			Expect(contents[0].Text).To(ContainSubstring("object"))
 		})
 	})

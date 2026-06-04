@@ -24,8 +24,4 @@ keywords:
 files:
   - "skills/SKILL.md"
   - "INSTALL.md"
-
-# Optional MCP server dependency
-mcp:
-  complypack:
-    optional: true
+  - "mcp.jsonc"

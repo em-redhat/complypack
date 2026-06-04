@@ -74,8 +74,8 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		return nil, fmt.Errorf("failed to load artifacts from %s: %w", cfg.Gemara.Source, err)
 	}
 
-	// Load schemas from configured sources
-	schemaMap, err := loadSchemas(ctx, cfg.Schemas)
+	// Load schemas from configured sources (both bytes and compiled CUE)
+	schemaMap, cueSchemaMap, err := loadSchemas(ctx, cfg.Schemas)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load schemas: %w", err)
 	}
@@ -93,6 +93,7 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		artifacts.Policies,
 		artifacts.EffectivePolicies,
 		schemaMap,
+		cueSchemaMap,
 		evalRegistry,
 	)
 
@@ -117,13 +118,25 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		mcpServer.AddResource(resource, createResourceHandler(store, uri))
 	}
 
-	// Register schema resources
+	// Register schema list resource (discovery)
+	schemaListURI := fmt.Sprintf("%s://%s", URIScheme, ResourceTypeSchema)
+	mcpServer.AddResource(&mcp.Resource{
+		URI:      schemaListURI,
+		Name:     "Available Platform Schemas",
+		MIMEType: MIMETypeJSON,
+	}, createResourceHandler(store, schemaListURI))
+
+	// Register per-platform schema resources
 	for platform := range schemaMap {
 		uri := fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeSchema, platform)
+		mime := MIMETypeCUE
+		if isJSONSchema(schemaMap[platform]) {
+			mime = MIMETypeJSONSchema
+		}
 		resource := &mcp.Resource{
 			URI:      uri,
 			Name:     fmt.Sprintf("Platform Schema: %s", platform),
-			MIMEType: MIMETypeJSONSchema,
+			MIMEType: mime,
 		}
 		mcpServer.AddResource(resource, createResourceHandler(store, uri))
 	}
@@ -190,11 +203,14 @@ func (s *Server) Run(ctx context.Context, transport mcp.Transport) error {
 	return s.mcp.Run(ctx, transport)
 }
 
-// loadSchemas loads all built-in platform schemas.
-// loadSchemas loads JSON schemas from configured sources.
-// Falls back to embedded schemas if source loading fails.
-func loadSchemas(ctx context.Context, schemaRefs []config.SchemaRef) (map[string][]byte, error) {
+// loadSchemas loads platform schemas from configured sources, returning both
+// the raw bytes (for MCP resource serving) and compiled CUE values (for
+// contract validation). Fails fast if a user-configured source cannot be
+// loaded (per ADR 004). Embedded schemas are used only when no source is
+// configured.
+func loadSchemas(ctx context.Context, schemaRefs []config.SchemaRef) (map[string][]byte, map[string]cue.Value, error) {
 	schemaMap := make(map[string][]byte)
+	cueSchemaMap := make(map[string]cue.Value)
 
 	for _, ref := range schemaRefs {
 		platform := ref.Platform
@@ -202,94 +218,96 @@ func loadSchemas(ctx context.Context, schemaRefs []config.SchemaRef) (map[string
 		// Determine source (new field takes precedence over legacy path)
 		source := ref.Source
 		if source == "" && ref.Path != "" {
-			// Legacy path field - convert to file:// source
 			source = "file://" + ref.Path
 		}
 
-		// Try loading from configured source
 		var data []byte
+		var cueVal cue.Value
 		var err error
 
 		if source != "" {
 			parsed, parseErr := ParseSchemaSource(source)
 			if parseErr != nil {
-				return nil, fmt.Errorf("failed to parse schema source for %s: %w", platform, parseErr)
+				return nil, nil, fmt.Errorf("failed to parse schema source for %s: %w", platform, parseErr)
 			}
 
-			data, err = loadJSONSchemaFromSource(ctx, parsed, platform)
+			data, err = loadSchemaBytes(ctx, parsed, platform)
 			if err != nil {
-				slog.Warn("failed to load schema from source, falling back to embedded",
-					"platform", platform, "source", source, "error", err)
+				return nil, nil, fmt.Errorf("failed to load schema for platform %s from %s: %w", platform, source, err)
 			}
-		}
 
-		// Fallback to embedded if source failed or not specified
-		if data == nil {
+			cueVal, err = LoadCUEFromSource(ctx, parsed, platform)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to load CUE schema for platform %s from %s: %w", platform, source, err)
+			}
+
+			slog.Info("loaded schema from source", "platform", platform, "source", source)
+		} else {
 			data, err = schemas.GetBuiltInSchema(platform)
 			if err != nil {
-				slog.Warn("no schema available for platform, skipping",
+				slog.Warn("no embedded schema available for platform, skipping",
 					"platform", platform, "error", err)
 				continue
 			}
+
+			cueVal, err = loadEmbeddedCUESchema(platform)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to compile embedded CUE schema for %s: %w", platform, err)
+			}
+
 			slog.Info("loaded embedded schema", "platform", platform)
 		}
 
 		schemaMap[platform] = data
+		cueSchemaMap[platform] = cueVal
 	}
 
-	return schemaMap, nil
+	return schemaMap, cueSchemaMap, nil
 }
 
-// loadJSONSchemaFromSource loads a JSON schema from a parsed source.
-func loadJSONSchemaFromSource(ctx context.Context, source SchemaSource, platform string) ([]byte, error) {
-	var data []byte
-	var format SchemaFormat
-	var err error
-
+// loadSchemaBytes loads schema content as bytes from a parsed source.
+// For CUE modules, serializes definitions as CUE syntax (LLMs can interpret
+// CUE definitions to understand field structure, types, and constraints).
+// For other sources, returns the raw file content.
+func loadSchemaBytes(ctx context.Context, source SchemaSource, platform string) ([]byte, error) {
 	switch source.Type {
-	case SourceTypeHTTPS, SourceTypeHTTP:
-		data, format, err = fetchSchemaFromURL(ctx, source.Path)
-	case SourceTypeFile, SourceTypeLegacyPath:
-		data, format, err = loadSchemaFromFile(source.Path)
 	case SourceTypeCUEModule:
-		// Load CUE schema and convert to JSON Schema
-		return loadJSONSchemaFromCUE(ctx, source, platform)
+		cueVal, err := LoadCUEFromSource(ctx, source, platform)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load CUE schema: %w", err)
+		}
+		cueSyntax := formatCUEDefinitions(cueVal)
+		if len(cueSyntax) == 0 {
+			return nil, fmt.Errorf("no definitions found in CUE module for %s", platform)
+		}
+		return cueSyntax, nil
+
+	case SourceTypeHTTPS, SourceTypeHTTP:
+		data, format, err := fetchSchemaFromURL(ctx, source.Path)
+		if err != nil {
+			return nil, err
+		}
+		if format != FormatJSON {
+			return nil, fmt.Errorf("expected JSON format, got %v", format)
+		}
+		return data, nil
+
+	case SourceTypeFile, SourceTypeLegacyPath:
+		data, format, err := loadSchemaFromFile(source.Path)
+		if err != nil {
+			return nil, err
+		}
+		if format != FormatJSON {
+			return nil, fmt.Errorf("expected JSON format, got %v", format)
+		}
+		return data, nil
+
 	case SourceTypeUnknown:
 		return nil, fmt.Errorf("no source specified")
+
 	default:
 		return nil, fmt.Errorf("unsupported source type: %v", source.Type)
 	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	if format != FormatJSON {
-		return nil, fmt.Errorf("expected JSON format, got %v", format)
-	}
-
-	slog.Info("loaded schema from source", "platform", platform, "source", source.Path)
-	return data, nil
-}
-
-// loadJSONSchemaFromCUE loads a CUE module and serializes its definitions as
-// CUE syntax. Modern CUE modules (e.g., cue.dev/x/githubactions) use validators
-// like matchN and struct.MinFields that have no OpenAPI/JSON Schema equivalent.
-// Serving the CUE syntax directly preserves full fidelity — LLMs can interpret
-// CUE definitions to understand field structure, types, and constraints.
-func loadJSONSchemaFromCUE(ctx context.Context, source SchemaSource, platform string) ([]byte, error) {
-	cueVal, err := loadCUEFromSource(ctx, source, platform)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load CUE schema: %w", err)
-	}
-
-	cueSyntax := formatCUEDefinitions(cueVal)
-	if len(cueSyntax) == 0 {
-		return nil, fmt.Errorf("no definitions found in CUE module for %s", platform)
-	}
-
-	slog.Info("loaded CUE schema (serving as CUE syntax)", "platform", platform, "source", source.Path)
-	return cueSyntax, nil
 }
 
 // formatCUEDefinitions extracts top-level definitions from a CUE value and

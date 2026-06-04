@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"cuelang.org/go/cue"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/complytime/complypack/schemas"
@@ -18,7 +19,8 @@ import (
 )
 
 // testLoadAllSchemas is a helper that loads all built-in schemas for testing.
-func testLoadAllSchemas(t *testing.T) map[string][]byte {
+// Returns both the byte schemas and compiled CUE schemas.
+func testLoadAllSchemas(t *testing.T) (map[string][]byte, map[string]cue.Value) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -27,12 +29,12 @@ func testLoadAllSchemas(t *testing.T) map[string][]byte {
 		refs = append(refs, config.SchemaRef{Platform: platform})
 	}
 
-	schemaMap, err := loadSchemas(ctx, refs)
+	schemaMap, cueSchemaMap, err := loadSchemas(ctx, refs)
 	require.NoError(t, err)
-	return schemaMap
+	return schemaMap, cueSchemaMap
 }
 
-func TestLoadCUESchemaForPlatform(t *testing.T) {
+func TestLoadEmbeddedCUESchema(t *testing.T) {
 	tests := []struct {
 		name        string
 		platform    string
@@ -59,7 +61,7 @@ func TestLoadCUESchemaForPlatform(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema, err := loadCUESchemaForPlatform(tt.platform)
+			schema, err := loadEmbeddedCUESchema(tt.platform)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)
@@ -113,8 +115,8 @@ func TestCreateTestPolicyTool(t *testing.T) {
 
 func TestValidateTestDataAgainstSchema(t *testing.T) {
 	// Create resource store with schemas
-	schemaMap := testLoadAllSchemas(t)
-	store := NewResourceStore(map[string][]byte{}, nil, nil, nil, schemaMap, evaluator.DefaultRegistry())
+	schemaMap, cueSchemaMap := testLoadAllSchemas(t)
+	store := NewResourceStore(map[string][]byte{}, nil, nil, nil, schemaMap, cueSchemaMap, evaluator.DefaultRegistry())
 
 	tests := []struct {
 		name        string
@@ -287,8 +289,8 @@ func TestBuildTestResultsResponse(t *testing.T) {
 
 func TestHandleValidatePolicy(t *testing.T) {
 	// Create resource store
-	schemaMap := testLoadAllSchemas(t)
-	store := NewResourceStore(map[string][]byte{}, nil, nil, nil, schemaMap, evaluator.DefaultRegistry())
+	schemaMap, cueSchemaMap := testLoadAllSchemas(t)
+	store := NewResourceStore(map[string][]byte{}, nil, nil, nil, schemaMap, cueSchemaMap, evaluator.DefaultRegistry())
 
 	handler := handleValidatePolicy(store)
 
@@ -374,8 +376,8 @@ func TestHandleValidatePolicy(t *testing.T) {
 
 func TestHandleTestPolicy(t *testing.T) {
 	// Create resource store
-	schemaMap := testLoadAllSchemas(t)
-	store := NewResourceStore(map[string][]byte{}, nil, nil, nil, schemaMap, evaluator.DefaultRegistry())
+	schemaMap, cueSchemaMap := testLoadAllSchemas(t)
+	store := NewResourceStore(map[string][]byte{}, nil, nil, nil, schemaMap, cueSchemaMap, evaluator.DefaultRegistry())
 
 	handler := handleTestPolicy(store)
 

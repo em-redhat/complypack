@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"cuelang.org/go/cue"
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/gemaraproj/go-gemara"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -20,7 +21,8 @@ type ResourceStore struct {
 	catalogs    map[string]*gemara.ControlCatalog  // parsed ControlCatalogs
 	policies    map[string]*gemara.Policy          // parsed Policies
 	effective   map[string]*gemara.EffectivePolicy // resolved policy graphs
-	schemas     map[string][]byte                  // platform JSON schemas
+	schemas     map[string][]byte                  // platform schemas (bytes for MCP resources)
+	cueSchemas  map[string]cue.Value               // compiled CUE schemas (for contract validation)
 	evaluators  *evaluator.Registry                // available policy evaluators
 }
 
@@ -31,6 +33,7 @@ func NewResourceStore(
 	policies map[string]*gemara.Policy,
 	effective map[string]*gemara.EffectivePolicy,
 	schemas map[string][]byte,
+	cueSchemas map[string]cue.Value,
 	evaluators *evaluator.Registry,
 ) *ResourceStore {
 	return &ResourceStore{
@@ -39,8 +42,19 @@ func NewResourceStore(
 		policies:    policies,
 		effective:   effective,
 		schemas:     schemas,
+		cueSchemas:  cueSchemas,
 		evaluators:  evaluators,
 	}
+}
+
+// CUESchema returns the compiled CUE schema for a platform.
+// Returns an error if the platform has no CUE schema loaded.
+func (rs *ResourceStore) CUESchema(platform string) (cue.Value, error) {
+	val, ok := rs.cueSchemas[platform]
+	if !ok {
+		return cue.Value{}, fmt.Errorf("no CUE schema loaded for platform %q", platform)
+	}
+	return val, nil
 }
 
 // ListResources returns all available catalog and schema resources.
@@ -56,12 +70,23 @@ func (rs *ResourceStore) ListResources(ctx context.Context) ([]mcp.Resource, err
 		})
 	}
 
-	// Add schema resources
+	// Add schema list resource
+	resources = append(resources, mcp.Resource{
+		URI:      fmt.Sprintf("%s://%s", URIScheme, ResourceTypeSchema),
+		Name:     "Available Platform Schemas",
+		MIMEType: MIMETypeJSON,
+	})
+
+	// Add per-platform schema resources
 	for platform := range rs.schemas {
+		mime := MIMETypeCUE
+		if isJSONSchema(rs.schemas[platform]) {
+			mime = MIMETypeJSONSchema
+		}
 		resources = append(resources, mcp.Resource{
 			URI:      fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeSchema, platform),
 			Name:     fmt.Sprintf("Platform Schema: %s", platform),
-			MIMEType: MIMETypeJSONSchema,
+			MIMEType: mime,
 		})
 	}
 
@@ -99,22 +124,59 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 		}}, nil
 
 	case ResourceTypeSchema:
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid URI format: %s", uri)
+		if len(parts) == 1 || parts[1] == "" {
+			return rs.readSchemaListResource(uri)
 		}
 		data, ok := rs.schemas[parts[1]]
 		if !ok {
 			return nil, fmt.Errorf("schema %q not found", parts[1])
 		}
+		mime := MIMETypeCUE
+		if isJSONSchema(data) {
+			mime = MIMETypeJSONSchema
+		}
 		return []*mcp.ResourceContents{{
 			URI:      uri,
-			MIMEType: MIMETypeJSONSchema,
+			MIMEType: mime,
 			Text:     string(data),
 		}}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
 	}
+}
+
+func (rs *ResourceStore) readSchemaListResource(uri string) ([]*mcp.ResourceContents, error) {
+	type schemaInfo struct {
+		Platform string `json:"platform"`
+		Format   string `json:"format"`
+	}
+
+	var list []schemaInfo
+	for platform := range rs.schemas {
+		format := "json-schema"
+		if _, hasCUE := rs.cueSchemas[platform]; hasCUE {
+			if _, hasJSON := rs.schemas[platform]; hasJSON && isJSONSchema(rs.schemas[platform]) {
+				format = "json-schema"
+			} else {
+				format = "cue"
+			}
+		}
+		list = append(list, schemaInfo{Platform: platform, Format: format})
+	}
+
+	data, err := json.Marshal(map[string]interface{}{
+		"platforms": list,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal schema list: %w", err)
+	}
+
+	return []*mcp.ResourceContents{{
+		URI:      uri,
+		MIMEType: MIMETypeJSON,
+		Text:     string(data),
+	}}, nil
 }
 
 func (rs *ResourceStore) readEvaluatorResource(uri string) ([]*mcp.ResourceContents, error) {
@@ -148,4 +210,19 @@ func (rs *ResourceStore) readEvaluatorResource(uri string) ([]*mcp.ResourceConte
 		MIMEType: MIMETypeJSON,
 		Text:     string(data),
 	}}, nil
+}
+
+// isJSONSchema returns true if the data looks like JSON (starts with '{').
+func isJSONSchema(data []byte) bool {
+	for _, b := range data {
+		switch b {
+		case ' ', '\t', '\n', '\r':
+			continue
+		case '{':
+			return true
+		default:
+			return false
+		}
+	}
+	return false
 }

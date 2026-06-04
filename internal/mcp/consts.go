@@ -14,5 +14,6 @@ const (
 	// MIME types
 	MIMETypeYAML       = "application/yaml"
 	MIMETypeJSON       = "application/json"
-	MIMETypeJSONSchema = "application/json"
+	MIMETypeJSONSchema = "application/schema+json"
+	MIMETypeCUE        = "application/cue"
 )
