@@ -12,10 +12,17 @@ evaluator-id: opa
 # ComplyPack artifact version
 version: 0.1.0
 
-# Gemara catalog source (file path or OCI reference)
+# Gemara artifact sources (catalogs, guidance, policies)
+# Each source is loaded independently; artifacts merge by metadata.id
 gemara:
-  source: file://./catalogs/my-controls.yaml
-  # OR: source: ghcr.io/org/controls:latest
+  sources:
+    - source: file://./catalogs/my-controls.yaml
+    # Add more sources as needed:
+    # - source: file://./guidance/iso-42001.yaml
+    # - source: oci://ghcr.io/org/controls:v1
+    #   plain-http: true
+  # Legacy single-source format (still supported):
+  # source: file://./catalogs/my-controls.yaml
 
 # Platform schemas - multiple source types supported
 schemas:
