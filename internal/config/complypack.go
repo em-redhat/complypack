@@ -50,9 +50,9 @@ type GemaraConfig struct {
 
 func (g *GemaraConfig) UnmarshalYAML(value *yaml.Node) error {
 	var raw struct {
-		Source    string             `yaml:"source"`
-		Sources  []GemaraSourceEntry `yaml:"sources"`
-		PlainHTTP bool              `yaml:"plain-http,omitempty"`
+		Source    string              `yaml:"source"`
+		Sources   []GemaraSourceEntry `yaml:"sources"`
+		PlainHTTP bool                `yaml:"plain-http,omitempty"`
 	}
 	if err := value.Decode(&raw); err != nil {
 		return err
