@@ -127,9 +127,14 @@ func (c *ComplyPackConfig) Validate() error {
 }
 
 // ValidateForMCP checks fields required for MCP server operation.
+// Unlike Validate(), this does not require fields only needed for pack/scan
+// (id, evaluator-id, version) since the MCP server can be configured
+// entirely via CLI flags.
 func (c *ComplyPackConfig) ValidateForMCP() error {
-	if err := c.Validate(); err != nil {
-		return err
+	for i, schema := range c.Schemas {
+		if schema.Platform == "" {
+			return fmt.Errorf("schema %d missing required field: platform", i)
+		}
 	}
 
 	if len(c.Gemara.Sources) == 0 {
