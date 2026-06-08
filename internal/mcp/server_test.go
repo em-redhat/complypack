@@ -243,12 +243,14 @@ func TestLoadedArtifacts_Merge(t *testing.T) {
 	a := &LoadedArtifacts{
 		RawCatalogs:       map[string][]byte{"cat-a": []byte("a")},
 		Catalogs:          map[string]*gemara.ControlCatalog{"cat-a": {}},
+		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{"guide-a": {}},
 		Policies:          map[string]*gemara.Policy{},
 		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
 	}
 	b := &LoadedArtifacts{
 		RawCatalogs:       map[string][]byte{"cat-b": []byte("b")},
 		Catalogs:          map[string]*gemara.ControlCatalog{"cat-b": {}},
+		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{"guide-b": {}},
 		Policies:          map[string]*gemara.Policy{},
 		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
 	}
@@ -257,18 +259,21 @@ func TestLoadedArtifacts_Merge(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, a.RawCatalogs, 2)
 	assert.Len(t, a.Catalogs, 2)
+	assert.Len(t, a.GuidanceCatalogs, 2)
 }
 
 func TestLoadedArtifacts_MergeDuplicateID(t *testing.T) {
 	a := &LoadedArtifacts{
 		RawCatalogs:       map[string][]byte{"same-id": []byte("a")},
 		Catalogs:          map[string]*gemara.ControlCatalog{},
+		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{},
 		Policies:          map[string]*gemara.Policy{},
 		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
 	}
 	b := &LoadedArtifacts{
 		RawCatalogs:       map[string][]byte{"same-id": []byte("b")},
 		Catalogs:          map[string]*gemara.ControlCatalog{},
+		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{},
 		Policies:          map[string]*gemara.Policy{},
 		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
 	}
