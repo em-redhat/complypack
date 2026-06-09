@@ -123,7 +123,6 @@ schemas:
 	// Removed: duplicate catalog test - no longer applicable with single source config
 }
 
-
 func TestLoadSchemas(t *testing.T) {
 	ctx := context.Background()
 

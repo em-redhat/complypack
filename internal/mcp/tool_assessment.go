@@ -133,7 +133,6 @@ func extractFromEffectivePolicy(ep *gemara.EffectivePolicy, filterControlID stri
 	return results
 }
 
-
 // GetAssessmentRequirementsHandler returns the handler (for testing).
 func GetAssessmentRequirementsHandler(store *ResourceStore) mcp.ToolHandler {
 	return handleGetAssessmentRequirements(store)

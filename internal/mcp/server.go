@@ -216,8 +216,6 @@ func createResourceHandler(store *ResourceStore, uri string) mcp.ResourceHandler
 	}
 }
 
-
-
 // Run starts the MCP server on the given transport.
 // It delegates to the underlying MCP SDK server's Run method.
 func (s *Server) Run(ctx context.Context, transport mcp.Transport) error {
