@@ -54,8 +54,8 @@ schemas:
 		// Verify resource store has catalog
 		store := srv.ResourceStore
 		require.NotNil(t, store)
-		assert.Len(t, store.catalogs, 1)
-		assert.Contains(t, store.catalogs, "controls-v1")
+		assert.Len(t, store.artifacts, 1)
+		assert.Contains(t, store.artifacts, "controls-v1")
 
 		// Verify schemas loaded
 		assert.NotEmpty(t, store.schemas)
@@ -123,48 +123,6 @@ schemas:
 	// Removed: duplicate catalog test - no longer applicable with single source config
 }
 
-func TestExtractCatalogName(t *testing.T) {
-	tests := []struct {
-		name     string
-		yaml     string
-		expected string
-		wantErr  bool
-	}{
-		{
-			name: "from metadata.id",
-			yaml: `metadata:
-  id: my-catalog
-  version: 1.0`,
-			expected: "my-catalog",
-			wantErr:  false,
-		},
-		{
-			name: "missing metadata.id",
-			yaml: `metadata:
-  version: 1.0`,
-			expected: "",
-			wantErr:  true,
-		},
-		{
-			name:     "invalid YAML",
-			yaml:     `invalid: [unclosed`,
-			expected: "",
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := extractCatalogName([]byte(tt.yaml))
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	}
-}
 
 func TestLoadSchemas(t *testing.T) {
 	ctx := context.Background()
@@ -241,41 +199,32 @@ controls:
 
 func TestLoadedArtifacts_Merge(t *testing.T) {
 	a := &LoadedArtifacts{
-		RawCatalogs:       map[string][]byte{"cat-a": []byte("a")},
-		Catalogs:          map[string]*gemara.ControlCatalog{"cat-a": {}},
-		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{"guide-a": {}},
-		Policies:          map[string]*gemara.Policy{},
-		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
+		Catalogs: map[string]*gemara.ControlCatalog{"cat-a": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{"guide-a": {Metadata: gemara.Metadata{Id: "guide-a"}}},
 	}
 	b := &LoadedArtifacts{
-		RawCatalogs:       map[string][]byte{"cat-b": []byte("b")},
-		Catalogs:          map[string]*gemara.ControlCatalog{"cat-b": {}},
-		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{"guide-b": {}},
-		Policies:          map[string]*gemara.Policy{},
-		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
+		Catalogs: map[string]*gemara.ControlCatalog{"cat-b": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{"guide-b": {Metadata: gemara.Metadata{Id: "guide-b"}}},
 	}
 
 	err := a.Merge(b)
 	require.NoError(t, err)
-	assert.Len(t, a.RawCatalogs, 2)
 	assert.Len(t, a.Catalogs, 2)
-	assert.Len(t, a.GuidanceCatalogs, 2)
+	assert.Len(t, a.Guidance, 2)
 }
 
 func TestLoadedArtifacts_MergeDuplicateID(t *testing.T) {
 	a := &LoadedArtifacts{
-		RawCatalogs:       map[string][]byte{"same-id": []byte("a")},
-		Catalogs:          map[string]*gemara.ControlCatalog{},
-		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{},
-		Policies:          map[string]*gemara.Policy{},
-		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
+		Catalogs: map[string]*gemara.ControlCatalog{"same-id": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{},
 	}
 	b := &LoadedArtifacts{
-		RawCatalogs:       map[string][]byte{"same-id": []byte("b")},
-		Catalogs:          map[string]*gemara.ControlCatalog{},
-		GuidanceCatalogs:  map[string]*gemara.GuidanceCatalog{},
-		Policies:          map[string]*gemara.Policy{},
-		EffectivePolicies: map[string]*gemara.EffectivePolicy{},
+		Catalogs: map[string]*gemara.ControlCatalog{"same-id": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{},
 	}
 
 	err := a.Merge(b)
@@ -324,7 +273,7 @@ schemas:
 
 	store := srv.ResourceStore
 	require.NotNil(t, store)
-	assert.Len(t, store.catalogs, 2)
-	assert.Contains(t, store.catalogs, "controls-v1")
-	assert.Contains(t, store.catalogs, "controls-v2")
+	assert.Len(t, store.artifacts, 2)
+	assert.Contains(t, store.artifacts, "controls-v1")
+	assert.Contains(t, store.artifacts, "controls-v2")
 }

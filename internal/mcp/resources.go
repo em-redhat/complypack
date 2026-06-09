@@ -12,38 +12,32 @@ import (
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/gemaraproj/go-gemara"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"gopkg.in/yaml.v3"
 )
 
-// ResourceStore manages catalogs and schemas for MCP resource handlers.
-// It holds both raw YAML (for MCP resource serving) and parsed artifacts (for tool handlers).
+// ResourceStore manages artifacts and schemas for MCP resource and tool handlers.
 type ResourceStore struct {
-	rawCatalogs map[string][]byte                  // raw YAML for ReadResource
-	catalogs    map[string]*gemara.ControlCatalog  // parsed ControlCatalogs
-	policies    map[string]*gemara.Policy          // parsed Policies
-	effective   map[string]*gemara.EffectivePolicy // resolved policy graphs
-	schemas     map[string][]byte                  // platform schemas (bytes for MCP resources)
-	cueSchemas  map[string]cue.Value               // compiled CUE schemas (for contract validation)
-	evaluators  *evaluator.Registry                // available policy evaluators
+	artifacts  map[string]any                     // all Gemara artifacts by metadata.id (for ReadResource)
+	effective  map[string]*gemara.EffectivePolicy // resolved policy graphs (for assessment tools)
+	schemas    map[string][]byte                  // platform schemas (bytes for MCP resources)
+	cueSchemas map[string]cue.Value               // compiled CUE schemas (for contract validation)
+	evaluators *evaluator.Registry                // available policy evaluators
 }
 
-// NewResourceStore creates a ResourceStore with raw and parsed artifacts.
+// NewResourceStore creates a ResourceStore.
 func NewResourceStore(
-	rawCatalogs map[string][]byte,
-	catalogs map[string]*gemara.ControlCatalog,
-	policies map[string]*gemara.Policy,
+	artifacts map[string]any,
 	effective map[string]*gemara.EffectivePolicy,
 	schemas map[string][]byte,
 	cueSchemas map[string]cue.Value,
 	evaluators *evaluator.Registry,
 ) *ResourceStore {
 	return &ResourceStore{
-		rawCatalogs: rawCatalogs,
-		catalogs:    catalogs,
-		policies:    policies,
-		effective:   effective,
-		schemas:     schemas,
-		cueSchemas:  cueSchemas,
-		evaluators:  evaluators,
+		artifacts:  artifacts,
+		effective:  effective,
+		schemas:    schemas,
+		cueSchemas: cueSchemas,
+		evaluators: evaluators,
 	}
 }
 
@@ -61,23 +55,20 @@ func (rs *ResourceStore) CUESchema(platform string) (cue.Value, error) {
 func (rs *ResourceStore) ListResources(ctx context.Context) ([]mcp.Resource, error) {
 	var resources []mcp.Resource
 
-	// Add catalog resources (from raw catalogs for ReadResource)
-	for name := range rs.rawCatalogs {
+	for name := range rs.artifacts {
 		resources = append(resources, mcp.Resource{
 			URI:      fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeCatalog, name),
-			Name:     fmt.Sprintf("Gemara Catalog: %s", name),
+			Name:     fmt.Sprintf("Gemara Artifact: %s", name),
 			MIMEType: MIMETypeYAML,
 		})
 	}
 
-	// Add schema list resource
 	resources = append(resources, mcp.Resource{
 		URI:      fmt.Sprintf("%s://%s", URIScheme, ResourceTypeSchema),
 		Name:     "Available Platform Schemas",
 		MIMEType: MIMETypeJSON,
 	})
 
-	// Add per-platform schema resources
 	for platform := range rs.schemas {
 		mime := MIMETypeCUE
 		if isJSONSchema(rs.schemas[platform]) {
@@ -95,7 +86,6 @@ func (rs *ResourceStore) ListResources(ctx context.Context) ([]mcp.Resource, err
 
 // ReadResource returns the content for a specific resource URI.
 func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.ResourceContents, error) {
-	// Parse URI: complypack://catalog/<name> or complypack://schema/<platform>
 	if !strings.HasPrefix(uri, URIScheme+"://") {
 		return nil, fmt.Errorf("invalid URI scheme: expected %s://", URIScheme)
 	}
@@ -113,9 +103,13 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid URI format: %s", uri)
 		}
-		data, ok := rs.rawCatalogs[parts[1]]
+		artifact, ok := rs.artifacts[parts[1]]
 		if !ok {
-			return nil, fmt.Errorf("catalog %q not found", parts[1])
+			return nil, fmt.Errorf("artifact %q not found", parts[1])
+		}
+		data, err := yaml.Marshal(artifact)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal artifact %q: %w", parts[1], err)
 		}
 		return []*mcp.ResourceContents{{
 			URI:      uri,

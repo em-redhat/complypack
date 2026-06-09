@@ -56,20 +56,11 @@ func handleGetAssessmentRequirements(store *ResourceStore) mcp.ToolHandler {
 			return nil, fmt.Errorf("invalid input: %w", err)
 		}
 
-		var requirements []AssessmentRequirementInfo
-
-		// Check if it's an effective policy (resolved policy graph)
-		if ep, found := store.effective[input.CatalogName]; found {
-			requirements = extractFromEffectivePolicy(ep, input.ControlID)
-		} else if policy, found := store.policies[input.CatalogName]; found {
-			// Standalone policy without resolution
-			requirements = extractFromPolicy(policy, input.ControlID)
-		} else if catalog, found := store.catalogs[input.CatalogName]; found {
-			// Standalone control catalog
-			requirements = extractFromCatalog(catalog, input.ControlID)
-		} else {
-			return nil, fmt.Errorf("catalog or policy %q not found", input.CatalogName)
+		ep, found := store.effective[input.CatalogName]
+		if !found {
+			return nil, fmt.Errorf("policy %q not found", input.CatalogName)
 		}
+		requirements := extractFromEffectivePolicy(ep, input.ControlID)
 
 		// Build response
 		responseData, err := json.Marshal(map[string]interface{}{
@@ -142,77 +133,6 @@ func extractFromEffectivePolicy(ep *gemara.EffectivePolicy, filterControlID stri
 	return results
 }
 
-// extractFromPolicy extracts requirements from a standalone policy (no resolution).
-func extractFromPolicy(policy *gemara.Policy, filterControlID string) []AssessmentRequirementInfo {
-	var results []AssessmentRequirementInfo
-
-	// Build parameter map from assessment plans
-	planParams := make(map[string][]gemara.Parameter)
-	for _, plan := range policy.Adherence.AssessmentPlans {
-		if len(plan.Parameters) > 0 {
-			planParams[plan.RequirementId] = plan.Parameters
-		}
-	}
-
-	// Iterate policy requirement modifications
-	for _, catalogImport := range policy.Imports.Catalogs {
-		for _, mod := range catalogImport.AssessmentRequirementModifications {
-			if filterControlID != "" && mod.TargetId != filterControlID {
-				continue
-			}
-
-			info := AssessmentRequirementInfo{
-				ID:            mod.Id,
-				ControlID:     mod.TargetId,
-				Text:          mod.Text,
-				Applicability: mod.Applicability,
-				Parameters:    make(map[string]string),
-			}
-
-			// Add structured parameters from assessment plan
-			if params, found := planParams[mod.Id]; found {
-				for _, param := range params {
-					if len(param.AcceptedValues) == 1 {
-						info.Parameters[param.Label] = param.AcceptedValues[0]
-					} else if len(param.AcceptedValues) > 1 {
-						info.Parameters[param.Label] = strings.Join(param.AcceptedValues, ", ")
-					}
-					if param.Description != "" {
-						info.Parameters[param.Label+"_description"] = param.Description
-					}
-				}
-			}
-
-			results = append(results, info)
-		}
-	}
-
-	return results
-}
-
-// extractFromCatalog extracts requirements from a standalone control catalog.
-func extractFromCatalog(catalog *gemara.ControlCatalog, filterControlID string) []AssessmentRequirementInfo {
-	var results []AssessmentRequirementInfo
-
-	for _, control := range catalog.Controls {
-		if filterControlID != "" && control.Id != filterControlID {
-			continue
-		}
-
-		for _, req := range control.AssessmentRequirements {
-			info := AssessmentRequirementInfo{
-				ID:            req.Id,
-				ControlID:     control.Id,
-				Text:          req.Text,
-				Applicability: req.Applicability,
-				Parameters:    make(map[string]string),
-			}
-			results = append(results, info)
-		}
-	}
-
-	return results
-}
 
 // GetAssessmentRequirementsHandler returns the handler (for testing).
 func GetAssessmentRequirementsHandler(store *ResourceStore) mcp.ToolHandler {
