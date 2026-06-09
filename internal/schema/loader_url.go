@@ -1,23 +1,42 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package mcp
+package schema
 
 import (
 	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	"strings"
 	"time"
 
 	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
 )
 
-// fetchSchemaFromURL downloads a schema from an HTTP(S) URL.
-// Returns the schema bytes and detected format.
+// URLLoader loads schemas from HTTP/HTTPS URLs.
+type URLLoader struct{}
+
+func (l *URLLoader) Match(source string) bool {
+	return strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://")
+}
+
+func (l *URLLoader) Load(ctx context.Context, source string, platform string) (*Schema, error) {
+	data, format, err := fetchSchemaFromURL(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if format != FormatJSON {
+		return nil, fmt.Errorf("expected JSON format, got %v", format)
+	}
+
+	return &Schema{
+		Platform: platform,
+		Bytes:    data,
+		CUE:      cue.Value{},
+	}, nil
+}
+
 func fetchSchemaFromURL(ctx context.Context, url string) ([]byte, SchemaFormat, error) {
-	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
@@ -44,26 +63,4 @@ func fetchSchemaFromURL(ctx context.Context, url string) ([]byte, SchemaFormat, 
 
 	format := DetectFormat(url)
 	return data, format, nil
-}
-
-// loadSchemaFromFile reads a schema from a local file path.
-// Returns the schema bytes and detected format.
-func loadSchemaFromFile(path string) ([]byte, SchemaFormat, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, FormatUnknown, fmt.Errorf("reading file: %w", err)
-	}
-
-	format := DetectFormat(path)
-	return data, format, nil
-}
-
-// buildCUEFromBytes compiles CUE bytes into a cue.Value.
-func buildCUEFromBytes(data []byte) (cue.Value, error) {
-	ctx := cuecontext.New()
-	value := ctx.CompileBytes(data)
-	if err := value.Err(); err != nil {
-		return cue.Value{}, fmt.Errorf("compiling CUE: %w", err)
-	}
-	return value, nil
 }

@@ -12,6 +12,7 @@ import (
 	"cuelang.org/go/cue"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/evaluator"
+	"github.com/complytime/complypack/internal/schema"
 	"github.com/complytime/complypack/schemas"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
@@ -29,12 +30,15 @@ func testLoadAllSchemas(t *testing.T) (map[string][]byte, map[string]cue.Value) 
 		refs = append(refs, config.SchemaRef{Platform: platform})
 	}
 
-	schemaMap, cueSchemaMap, err := loadSchemas(ctx, refs)
+	schemaMap, cueSchemaMap, err := loadSchemas(ctx, refs, schema.DefaultRegistry())
 	require.NoError(t, err)
 	return schemaMap, cueSchemaMap
 }
 
-func TestLoadEmbeddedCUESchema(t *testing.T) {
+func TestLoadEmbeddedSchema(t *testing.T) {
+	ctx := context.Background()
+	reg := schema.DefaultRegistry()
+
 	tests := []struct {
 		name        string
 		platform    string
@@ -61,13 +65,13 @@ func TestLoadEmbeddedCUESchema(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema, err := loadEmbeddedCUESchema(tt.platform)
+			s, err := reg.Load(ctx, "", tt.platform)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)
 			} else {
 				require.NoError(t, err)
-				assert.True(t, schema.Exists(), "schema should exist")
+				assert.True(t, s.CUE.Exists(), "CUE schema should exist")
 			}
 		})
 	}

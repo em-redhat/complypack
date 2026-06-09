@@ -8,15 +8,13 @@ import (
 	"log"
 
 	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/evaluator"
-	"github.com/complytime/complypack/internal/mcp"
 	"github.com/complytime/complypack/internal/packer"
 	"github.com/complytime/complypack/internal/prepack"
 	"github.com/complytime/complypack/internal/registry"
+	"github.com/complytime/complypack/internal/schema"
 	"github.com/complytime/complypack/pkg/complypack"
-	"github.com/complytime/complypack/schemas"
 	"github.com/spf13/cobra"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/memory"
@@ -153,21 +151,12 @@ func runPrePackValidation(ctx context.Context, cfg *config.ComplyPackConfig, con
 			source = "file://" + ref.Path
 		}
 
-		if source != "" {
-			parsed, parseErr := mcp.ParseSchemaSource(source)
-			if parseErr != nil {
-				return fmt.Errorf("invalid schema source for %s: %w", ref.Platform, parseErr)
-			}
-			cueSchema, err = mcp.LoadCUEFromSource(ctx, parsed, ref.Platform)
-			if err != nil {
-				return fmt.Errorf("loading CUE schema for %s: %w", ref.Platform, err)
-			}
-		} else {
-			cueSchema, err = loadEmbeddedCUE(ref.Platform)
-			if err != nil {
-				return fmt.Errorf("loading embedded CUE schema for %s: %w", ref.Platform, err)
-			}
+		schemaReg := schema.DefaultRegistry()
+		s, err := schemaReg.Load(ctx, source, ref.Platform)
+		if err != nil {
+			return fmt.Errorf("loading CUE schema for %s: %w", ref.Platform, err)
 		}
+		cueSchema = s.CUE
 	}
 
 	log.Printf("Validating policies in %s...", contentDir)
@@ -211,19 +200,4 @@ func runPrePackValidation(ctx context.Context, cfg *config.ComplyPackConfig, con
 
 	log.Printf("Validation passed.")
 	return nil
-}
-
-// loadEmbeddedCUE loads a CUE schema from embedded files.
-func loadEmbeddedCUE(platform string) (cue.Value, error) {
-	data, err := schemas.GetBuiltInCUESchema(platform)
-	if err != nil {
-		return cue.Value{}, err
-	}
-
-	ctx := cuecontext.New()
-	val := ctx.CompileBytes(data)
-	if val.Err() != nil {
-		return cue.Value{}, val.Err()
-	}
-	return val, nil
 }

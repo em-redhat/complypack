@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/complytime/complypack/internal/mcp"
+	"github.com/complytime/complypack/internal/schema"
 	"github.com/complytime/complypack/internal/validator"
 	"github.com/complytime/complypack/schemas"
 	. "github.com/onsi/ginkgo/v2"
@@ -22,11 +22,8 @@ var _ = Describe("Contract Validation", func() {
 
 	Describe("CUE registry module with definition fragment", func() {
 		It("validates GitHub Actions workflow paths without false positives", func() {
-			source, err := mcp.ParseSchemaSource("cue://cue.dev/x/githubactions@v0#Workflow")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(source.Fragment).To(Equal("Workflow"))
-
-			schema, err := mcp.LoadCUEFromSource(ctx, source, "ci")
+			reg := schema.DefaultRegistry()
+			s, err := reg.Load(ctx, "cue://cue.dev/x/githubactions@v0#Workflow", "ci")
 			Expect(err).NotTo(HaveOccurred())
 
 			policy := `package ci.example
@@ -47,17 +44,14 @@ deny contains msg if {
     msg := "test"
 }
 `
-			violations, err := validator.CheckContract("policy.rego", policy, schema)
+			violations, err := validator.CheckContract("policy.rego", policy, s.CUE)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(violations).To(BeEmpty(), "valid GitHub Actions paths should not produce violations")
 		})
 
 		It("returns error when fragment is missing on definitions-only module", func() {
-			source, err := mcp.ParseSchemaSource("cue://cue.dev/x/githubactions@v0")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(source.Fragment).To(BeEmpty())
-
-			_, err = mcp.LoadCUEFromSource(ctx, source, "ci")
+			reg := schema.DefaultRegistry()
+			_, err := reg.Load(ctx, "cue://cue.dev/x/githubactions@v0", "ci")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("#Workflow"))
 		})

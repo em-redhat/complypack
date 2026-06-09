@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package mcp
+package schema
 
 import (
 	"context"
@@ -12,6 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestCUELoader_Match(t *testing.T) {
+	l := &CUELoader{}
+	assert.True(t, l.Match("cue://cue.dev/x/k8s"))
+	assert.False(t, l.Match("https://example.com"))
+	assert.False(t, l.Match("file:///path"))
+	assert.False(t, l.Match(""))
+}
+
 func TestSplitModuleVersion(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -19,47 +27,17 @@ func TestSplitModuleVersion(t *testing.T) {
 		wantPath    string
 		wantVersion string
 	}{
-		{
-			name:        "no version",
-			input:       "cue.dev/x/githubactions",
-			wantPath:    "cue.dev/x/githubactions",
-			wantVersion: "",
-		},
-		{
-			name:        "explicit version",
-			input:       "cue.dev/x/githubactions@v0.2.0",
-			wantPath:    "cue.dev/x/githubactions",
-			wantVersion: "v0.2.0",
-		},
-		{
-			name:        "latest keyword",
-			input:       "cue.dev/x/githubactions@latest",
-			wantPath:    "cue.dev/x/githubactions",
-			wantVersion: "latest",
-		},
-		{
-			name:        "major version suffix only",
-			input:       "cue.dev/x/githubactions@v0",
-			wantPath:    "cue.dev/x/githubactions@v0",
-			wantVersion: "",
-		},
-		{
-			name:        "major version suffix with version",
-			input:       "github.com/org/mod@v2@v2.1.0",
-			wantPath:    "github.com/org/mod@v2",
-			wantVersion: "v2.1.0",
-		},
-		{
-			name:        "v0.latest shorthand",
-			input:       "cue.dev/x/githubactions@v0.latest",
-			wantPath:    "cue.dev/x/githubactions",
-			wantVersion: "v0.latest",
-		},
+		{"no version", "cue.dev/x/githubactions", "cue.dev/x/githubactions", ""},
+		{"explicit version", "cue.dev/x/githubactions@v0.2.0", "cue.dev/x/githubactions", "v0.2.0"},
+		{"latest keyword", "cue.dev/x/githubactions@latest", "cue.dev/x/githubactions", "latest"},
+		{"major version suffix only", "cue.dev/x/githubactions@v0", "cue.dev/x/githubactions@v0", ""},
+		{"major with version", "github.com/org/mod@v2@v2.1.0", "github.com/org/mod@v2", "v2.1.0"},
+		{"v0.latest shorthand", "cue.dev/x/githubactions@v0.latest", "cue.dev/x/githubactions", "v0.latest"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPath, gotVersion := splitModuleVersion(tt.input)
+			gotPath, gotVersion := SplitModuleVersion(tt.input)
 			assert.Equal(t, tt.wantPath, gotPath)
 			assert.Equal(t, tt.wantVersion, gotVersion)
 		})
@@ -84,7 +62,24 @@ func TestIsMajorOnly(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.want, isMajorOnly(tt.input))
+			assert.Equal(t, tt.want, IsMajorOnly(tt.input))
+		})
+	}
+}
+
+func TestImportPathForModule(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"cue.dev/x/githubactions@v0", "cue.dev/x/githubactions"},
+		{"cue.dev/x/githubactions", "cue.dev/x/githubactions"},
+		{"github.com/org/mod@v2", "github.com/org/mod"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.want, ImportPathForModule(tt.input))
 		})
 	}
 }
@@ -110,7 +105,7 @@ func TestResolveCUEDefinition(t *testing.T) {
 		require.NoError(t, err)
 
 		name := resolved.LookupPath(cue.MakePath(cue.Str("name").Optional()))
-		assert.True(t, name.Exists(), "resolved value should have 'name' field")
+		assert.True(t, name.Exists())
 	})
 
 	t.Run("no fragment with regular fields passes through", func(t *testing.T) {
@@ -124,7 +119,7 @@ on?: _
 		require.NoError(t, err)
 
 		name := resolved.LookupPath(cue.MakePath(cue.Str("name").Optional()))
-		assert.True(t, name.Exists(), "value should pass through unchanged")
+		assert.True(t, name.Exists())
 	})
 
 	t.Run("no fragment with definitions only returns error", func(t *testing.T) {
@@ -166,9 +161,8 @@ func TestLoadFromCUERegistry_Integration(t *testing.T) {
 	ctx := context.Background()
 
 	val, err := loadFromCUERegistry(ctx, "cue.dev/x/githubactions@v0")
-	require.NoError(t, err, "loadFromCUERegistry should succeed for cue.dev/x/githubactions")
+	require.NoError(t, err)
 
-	// The loaded value should have a #Workflow definition
 	workflow := val.LookupPath(cue.ParsePath("#Workflow"))
-	assert.True(t, workflow.Exists(), "expected #Workflow definition in githubactions module")
+	assert.True(t, workflow.Exists())
 }

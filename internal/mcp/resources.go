@@ -10,31 +10,32 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/complytime/complypack/internal/evaluator"
-	"github.com/gemaraproj/go-gemara"
+	"github.com/complytime/complypack/internal/requirement"
+	"github.com/complytime/complypack/internal/schema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gopkg.in/yaml.v3"
 )
 
 // ResourceStore manages artifacts and schemas for MCP resource and tool handlers.
 type ResourceStore struct {
-	artifacts  map[string]any                     // all Gemara artifacts by metadata.id (for ReadResource)
-	effective  map[string]*gemara.EffectivePolicy // resolved policy graphs (for assessment tools)
-	schemas    map[string][]byte                  // platform schemas (bytes for MCP resources)
-	cueSchemas map[string]cue.Value               // compiled CUE schemas (for contract validation)
-	evaluators *evaluator.Registry                // available policy evaluators
+	artifacts  map[string]any                         // all Gemara artifacts by metadata.id (for ReadResource)
+	resolved   map[string]*requirement.ResolvedPolicy // resolved policy graphs (for assessment tools)
+	schemas    map[string][]byte                      // platform schemas (bytes for MCP resources)
+	cueSchemas map[string]cue.Value                   // compiled CUE schemas (for contract validation)
+	evaluators *evaluator.Registry                    // available policy evaluators
 }
 
 // NewResourceStore creates a ResourceStore.
 func NewResourceStore(
 	artifacts map[string]any,
-	effective map[string]*gemara.EffectivePolicy,
+	resolved map[string]*requirement.ResolvedPolicy,
 	schemas map[string][]byte,
 	cueSchemas map[string]cue.Value,
 	evaluators *evaluator.Registry,
 ) *ResourceStore {
 	return &ResourceStore{
 		artifacts:  artifacts,
-		effective:  effective,
+		resolved:   resolved,
 		schemas:    schemas,
 		cueSchemas: cueSchemas,
 		evaluators: evaluators,
@@ -71,7 +72,7 @@ func (rs *ResourceStore) ListResources(ctx context.Context) ([]mcp.Resource, err
 
 	for platform := range rs.schemas {
 		mime := MIMETypeCUE
-		if isJSONSchema(rs.schemas[platform]) {
+		if schema.IsJSONSchema(rs.schemas[platform]) {
 			mime = MIMETypeJSONSchema
 		}
 		resources = append(resources, mcp.Resource{
@@ -126,7 +127,7 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 			return nil, fmt.Errorf("schema %q not found", parts[1])
 		}
 		mime := MIMETypeCUE
-		if isJSONSchema(data) {
+		if schema.IsJSONSchema(data) {
 			mime = MIMETypeJSONSchema
 		}
 		return []*mcp.ResourceContents{{
@@ -150,7 +151,7 @@ func (rs *ResourceStore) readSchemaListResource(uri string) ([]*mcp.ResourceCont
 	for platform := range rs.schemas {
 		format := "json-schema"
 		if _, hasCUE := rs.cueSchemas[platform]; hasCUE {
-			if _, hasJSON := rs.schemas[platform]; hasJSON && isJSONSchema(rs.schemas[platform]) {
+			if _, hasJSON := rs.schemas[platform]; hasJSON && schema.IsJSONSchema(rs.schemas[platform]) {
 				format = "json-schema"
 			} else {
 				format = "cue"
@@ -204,19 +205,4 @@ func (rs *ResourceStore) readEvaluatorResource(uri string) ([]*mcp.ResourceConte
 		MIMEType: MIMETypeJSON,
 		Text:     string(data),
 	}}, nil
-}
-
-// isJSONSchema returns true if the data looks like JSON (starts with '{').
-func isJSONSchema(data []byte) bool {
-	for _, b := range data {
-		switch b {
-		case ' ', '\t', '\n', '\r':
-			continue
-		case '{':
-			return true
-		default:
-			return false
-		}
-	}
-	return false
 }

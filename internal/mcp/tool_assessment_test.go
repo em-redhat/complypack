@@ -7,65 +7,85 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/complytime/complypack/internal/requirement"
 	"github.com/gemaraproj/go-gemara"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func testEffectivePolicy() *gemara.EffectivePolicy {
-	return &gemara.EffectivePolicy{
-		Policy: gemara.Policy{
-			Metadata: gemara.Metadata{Id: "test-policy"},
-			Adherence: gemara.Adherence{
-				AssessmentPlans: []gemara.AssessmentPlan{
+func testResolvedPolicy() *requirement.ResolvedPolicy {
+	catalog := &gemara.ControlCatalog{
+		Metadata: gemara.Metadata{Id: "test-catalog"},
+		Controls: []gemara.Control{
+			{
+				Id: "TEST-001",
+				AssessmentRequirements: []gemara.AssessmentRequirement{
 					{
-						RequirementId: "TEST-001-AR1",
-						Parameters: []gemara.Parameter{
-							{Label: "threshold", AcceptedValues: []string{"90"}},
-						},
+						Id:            "TEST-001-AR1",
+						Text:          "Test requirement",
+						Applicability: []string{"test"},
+					},
+					{
+						Id:   "TEST-001-AR2",
+						Text: "Second requirement",
 					},
 				},
 			},
-		},
-		ControlCatalogs: []gemara.ControlCatalog{
 			{
-				Metadata: gemara.Metadata{Id: "test-catalog"},
-				Controls: []gemara.Control{
+				Id: "TEST-002",
+				AssessmentRequirements: []gemara.AssessmentRequirement{
 					{
-						Id: "TEST-001",
-						AssessmentRequirements: []gemara.AssessmentRequirement{
-							{
-								Id:            "TEST-001-AR1",
-								Text:          "Test requirement",
-								Applicability: []string{"test"},
-							},
-							{
-								Id:   "TEST-001-AR2",
-								Text: "Second requirement",
-							},
-						},
-					},
-					{
-						Id: "TEST-002",
-						AssessmentRequirements: []gemara.AssessmentRequirement{
-							{
-								Id:   "TEST-002-AR1",
-								Text: "Third requirement",
-							},
-						},
+						Id:   "TEST-002-AR1",
+						Text: "Third requirement",
 					},
 				},
 			},
 		},
 	}
+
+	policy := &gemara.Policy{
+		Metadata: gemara.Metadata{
+			Id: "test-policy",
+			MappingReferences: []gemara.MappingReference{
+				{Id: "test-catalog"},
+			},
+		},
+		Imports: gemara.Imports{
+			Catalogs: []gemara.CatalogImport{
+				{ReferenceId: "test-catalog"},
+			},
+		},
+		Adherence: gemara.Adherence{
+			AssessmentPlans: []gemara.AssessmentPlan{
+				{
+					RequirementId: "TEST-001-AR1",
+					Parameters: []gemara.Parameter{
+						{Label: "threshold", AcceptedValues: []string{"90"}},
+					},
+				},
+			},
+		},
+	}
+
+	set := &requirement.ArtifactSet{
+		Catalogs: map[string]*gemara.ControlCatalog{"test-catalog": catalog},
+		Policies: map[string]*gemara.Policy{"test-policy": policy},
+		Guidance: make(map[string]*gemara.GuidanceCatalog),
+	}
+
+	rp, err := requirement.ResolvePolicy(*policy, set)
+	if err != nil {
+		panic(err)
+	}
+	return rp
 }
 
 func TestHandleGetAssessmentRequirements(t *testing.T) {
 	store := &ResourceStore{
 		artifacts: map[string]any{},
-		effective: map[string]*gemara.EffectivePolicy{
-			"test-policy": testEffectivePolicy(),
+		resolved: map[string]*requirement.ResolvedPolicy{
+			"test-policy": testResolvedPolicy(),
 		},
 		schemas: map[string][]byte{},
 	}
@@ -219,23 +239,23 @@ func TestCreateGetAssessmentRequirementsTool(t *testing.T) {
 	assert.Contains(t, required, "catalogName")
 }
 
-func TestExtractFromEffectivePolicy(t *testing.T) {
-	ep := testEffectivePolicy()
+func TestExtractFromResolvedPolicy(t *testing.T) {
+	rp := testResolvedPolicy()
 
 	t.Run("extract all", func(t *testing.T) {
-		results := extractFromEffectivePolicy(ep, "")
+		results := extractFromResolvedPolicy(rp, "")
 		assert.Len(t, results, 3)
 	})
 
 	t.Run("filter by control", func(t *testing.T) {
-		results := extractFromEffectivePolicy(ep, "TEST-001")
+		results := extractFromResolvedPolicy(rp, "TEST-001")
 		assert.Len(t, results, 2)
 		assert.Equal(t, "TEST-001", results[0].ControlID)
 		assert.Equal(t, "TEST-001", results[1].ControlID)
 	})
 
 	t.Run("parameters populated from assessment plans", func(t *testing.T) {
-		results := extractFromEffectivePolicy(ep, "TEST-001")
+		results := extractFromResolvedPolicy(rp, "TEST-001")
 		assert.Equal(t, "90", results[0].Parameters["threshold"])
 		assert.Empty(t, results[1].Parameters)
 	})

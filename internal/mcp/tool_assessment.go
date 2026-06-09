@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gemaraproj/go-gemara"
+	"github.com/complytime/complypack/internal/requirement"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -56,11 +56,11 @@ func handleGetAssessmentRequirements(store *ResourceStore) mcp.ToolHandler {
 			return nil, fmt.Errorf("invalid input: %w", err)
 		}
 
-		ep, found := store.effective[input.CatalogName]
+		rp, found := store.resolved[input.CatalogName]
 		if !found {
 			return nil, fmt.Errorf("policy %q not found", input.CatalogName)
 		}
-		requirements := extractFromEffectivePolicy(ep, input.ControlID)
+		requirements := extractFromResolvedPolicy(rp, input.ControlID)
 
 		// Build response
 		responseData, err := json.Marshal(map[string]interface{}{
@@ -83,50 +83,37 @@ func handleGetAssessmentRequirements(store *ResourceStore) mcp.ToolHandler {
 	}
 }
 
-// extractFromEffectivePolicy extracts requirements from a resolved policy graph.
-func extractFromEffectivePolicy(ep *gemara.EffectivePolicy, filterControlID string) []AssessmentRequirementInfo {
+// extractFromResolvedPolicy extracts requirements from a resolved policy graph.
+func extractFromResolvedPolicy(rp *requirement.ResolvedPolicy, filterControlID string) []AssessmentRequirementInfo {
 	var results []AssessmentRequirementInfo
 
-	// Build parameter map from assessment plans
-	planParams := make(map[string][]gemara.Parameter)
-	for _, plan := range ep.Policy.Adherence.AssessmentPlans {
-		if len(plan.Parameters) > 0 {
-			planParams[plan.RequirementId] = plan.Parameters
-		}
+	controlIDs := rp.ControlIDs()
+	if filterControlID != "" {
+		controlIDs = []string{filterControlID}
 	}
 
-	// Iterate resolved catalogs (overlays already applied)
-	for _, catalog := range ep.ControlCatalogs {
-		for _, control := range catalog.Controls {
-			if filterControlID != "" && control.Id != filterControlID {
-				continue
+	for _, controlID := range controlIDs {
+		for _, req := range rp.RequirementsForControl(controlID) {
+			info := AssessmentRequirementInfo{
+				ID:            req.Id,
+				ControlID:     controlID,
+				Text:          req.Text,
+				Applicability: req.Applicability,
+				Parameters:    make(map[string]string),
 			}
 
-			for _, req := range control.AssessmentRequirements {
-				info := AssessmentRequirementInfo{
-					ID:            req.Id,
-					ControlID:     control.Id,
-					Text:          req.Text,
-					Applicability: req.Applicability,
-					Parameters:    make(map[string]string),
+			for _, param := range rp.ParametersForRequirement(req.Id) {
+				if len(param.AcceptedValues) == 1 {
+					info.Parameters[param.Label] = param.AcceptedValues[0]
+				} else if len(param.AcceptedValues) > 1 {
+					info.Parameters[param.Label] = strings.Join(param.AcceptedValues, ", ")
 				}
-
-				// Add structured parameters from assessment plan
-				if params, found := planParams[req.Id]; found {
-					for _, param := range params {
-						if len(param.AcceptedValues) == 1 {
-							info.Parameters[param.Label] = param.AcceptedValues[0]
-						} else if len(param.AcceptedValues) > 1 {
-							info.Parameters[param.Label] = strings.Join(param.AcceptedValues, ", ")
-						}
-						if param.Description != "" {
-							info.Parameters[param.Label+"_description"] = param.Description
-						}
-					}
+				if param.Description != "" {
+					info.Parameters[param.Label+"_description"] = param.Description
 				}
-
-				results = append(results, info)
 			}
+
+			results = append(results, info)
 		}
 	}
 

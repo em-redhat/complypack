@@ -13,8 +13,8 @@ import (
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/complytime/complypack/internal/registry"
-	"github.com/complytime/complypack/schemas"
-	"github.com/gemaraproj/go-gemara"
+	"github.com/complytime/complypack/internal/requirement"
+	"github.com/complytime/complypack/internal/schema"
 	"github.com/gemaraproj/go-gemara/bundle"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -68,11 +68,7 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 	}
 
 	// Load Gemara artifacts from all configured sources
-	loaded := &LoadedArtifacts{
-		Catalogs: make(map[string]*gemara.ControlCatalog),
-		Policies: make(map[string]*gemara.Policy),
-		Guidance: make(map[string]*gemara.GuidanceCatalog),
-	}
+	loaded := requirement.NewArtifactSet()
 	for _, entry := range cfg.Gemara.Sources {
 		src, err := loadArtifacts(ctx, entry.Source, entry.PlainHTTP)
 		if err != nil {
@@ -83,24 +79,15 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		}
 	}
 
-	// Resolve effective policies. All loaded artifacts are intermediate
-	// state consumed here — only the resolved graphs reach the runtime.
-	var allCatalogs []gemara.ControlCatalog
-	for _, c := range loaded.Catalogs {
-		allCatalogs = append(allCatalogs, *c)
-	}
-	var allGuidance []gemara.GuidanceCatalog
-	for _, gc := range loaded.Guidance {
-		allGuidance = append(allGuidance, *gc)
-	}
-	effectivePolicies := make(map[string]*gemara.EffectivePolicy)
+	// Resolve effective policies
+	resolved := make(map[string]*requirement.ResolvedPolicy)
 	for id, policy := range loaded.Policies {
-		if len(allCatalogs) > 0 || len(allGuidance) > 0 {
-			effective, err := gemara.ResolveEffectivePolicy(*policy, allCatalogs, allGuidance)
+		if len(loaded.Catalogs) > 0 || len(loaded.Guidance) > 0 {
+			rp, err := requirement.ResolvePolicy(*policy, loaded)
 			if err != nil {
 				return nil, fmt.Errorf("failed to resolve effective policy %s: %w", id, err)
 			}
-			effectivePolicies[id] = effective
+			resolved[id] = rp
 		}
 	}
 
@@ -116,8 +103,9 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		allArtifacts[id] = p
 	}
 
-	// Load schemas from configured sources (both bytes and compiled CUE)
-	schemaMap, cueSchemaMap, err := loadSchemas(ctx, cfg.Schemas)
+	// Load schemas from configured sources
+	schemaReg := schema.DefaultRegistry()
+	schemaMap, cueSchemaMap, err := loadSchemas(ctx, cfg.Schemas, schemaReg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load schemas: %w", err)
 	}
@@ -130,7 +118,7 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 
 	store := NewResourceStore(
 		allArtifacts,
-		effectivePolicies,
+		resolved,
 		schemaMap,
 		cueSchemaMap,
 		evalRegistry,
@@ -169,7 +157,7 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 	for platform := range schemaMap {
 		uri := fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeSchema, platform)
 		mime := MIMETypeCUE
-		if isJSONSchema(schemaMap[platform]) {
+		if schema.IsJSONSchema(schemaMap[platform]) {
 			mime = MIMETypeJSONSchema
 		}
 		resource := &mcp.Resource{
@@ -222,278 +210,97 @@ func (s *Server) Run(ctx context.Context, transport mcp.Transport) error {
 	return s.mcp.Run(ctx, transport)
 }
 
-// loadSchemas loads platform schemas from configured sources, returning both
-// the raw bytes (for MCP resource serving) and compiled CUE values (for
-// contract validation). Fails fast if a user-configured source cannot be
-// loaded (per ADR 004). Embedded schemas are used only when no source is
-// configured.
-func loadSchemas(ctx context.Context, schemaRefs []config.SchemaRef) (map[string][]byte, map[string]cue.Value, error) {
+// loadSchemas loads platform schemas via the schema registry.
+func loadSchemas(ctx context.Context, schemaRefs []config.SchemaRef, reg *schema.Registry) (map[string][]byte, map[string]cue.Value, error) {
 	schemaMap := make(map[string][]byte)
 	cueSchemaMap := make(map[string]cue.Value)
 
 	for _, ref := range schemaRefs {
 		platform := ref.Platform
 
-		// Determine source (new field takes precedence over legacy path)
 		source := ref.Source
 		if source == "" && ref.Path != "" {
 			source = "file://" + ref.Path
 		}
 
-		var data []byte
-		var cueVal cue.Value
-		var err error
-
-		if source != "" {
-			parsed, parseErr := ParseSchemaSource(source)
-			if parseErr != nil {
-				return nil, nil, fmt.Errorf("failed to parse schema source for %s: %w", platform, parseErr)
-			}
-
-			data, err = loadSchemaBytes(ctx, parsed, platform)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to load schema for platform %s from %s: %w", platform, source, err)
-			}
-
-			cueVal, err = LoadCUEFromSource(ctx, parsed, platform)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to load CUE schema for platform %s from %s: %w", platform, source, err)
-			}
-
-			slog.Info("loaded schema from source", "platform", platform, "source", source)
-		} else {
-			data, err = schemas.GetBuiltInSchema(platform)
-			if err != nil {
-				slog.Warn("no embedded schema available for platform, skipping",
+		s, err := reg.Load(ctx, source, platform)
+		if err != nil {
+			if source == "" {
+				slog.Warn("no schema available for platform, skipping",
 					"platform", platform, "error", err)
 				continue
 			}
-
-			cueVal, err = loadEmbeddedCUESchema(platform)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to compile embedded CUE schema for %s: %w", platform, err)
-			}
-
-			slog.Info("loaded embedded schema", "platform", platform)
+			return nil, nil, fmt.Errorf("failed to load schema for platform %s from %s: %w", platform, source, err)
 		}
 
-		schemaMap[platform] = data
-		cueSchemaMap[platform] = cueVal
+		schemaMap[platform] = s.Bytes
+		cueSchemaMap[platform] = s.CUE
+		slog.Info("loaded schema", "platform", platform, "source", source)
 	}
 
 	return schemaMap, cueSchemaMap, nil
 }
 
-// loadSchemaBytes loads schema content as bytes from a parsed source.
-// For CUE modules, serializes definitions as CUE syntax (LLMs can interpret
-// CUE definitions to understand field structure, types, and constraints).
-// For other sources, returns the raw file content.
-func loadSchemaBytes(ctx context.Context, source SchemaSource, platform string) ([]byte, error) {
-	switch source.Type {
-	case SourceTypeCUEModule:
-		cueVal, err := LoadCUEFromSource(ctx, source, platform)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load CUE schema: %w", err)
-		}
-		cueSyntax := formatCUEDefinitions(cueVal)
-		if len(cueSyntax) == 0 {
-			return nil, fmt.Errorf("no definitions found in CUE module for %s", platform)
-		}
-		return cueSyntax, nil
-
-	case SourceTypeHTTPS, SourceTypeHTTP:
-		data, format, err := fetchSchemaFromURL(ctx, source.Path)
-		if err != nil {
-			return nil, err
-		}
-		if format != FormatJSON {
-			return nil, fmt.Errorf("expected JSON format, got %v", format)
-		}
-		return data, nil
-
-	case SourceTypeFile, SourceTypeLegacyPath:
-		data, format, err := loadSchemaFromFile(source.Path)
-		if err != nil {
-			return nil, err
-		}
-		if format != FormatJSON {
-			return nil, fmt.Errorf("expected JSON format, got %v", format)
-		}
-		return data, nil
-
-	case SourceTypeUnknown:
-		return nil, fmt.Errorf("no source specified")
-
-	default:
-		return nil, fmt.Errorf("unsupported source type: %v", source.Type)
-	}
-}
-
-// formatCUEDefinitions extracts top-level definitions from a CUE value and
-// formats them as readable CUE syntax for LLM consumption.
-func formatCUEDefinitions(val cue.Value) []byte {
-	var sb strings.Builder
-
-	iter, _ := val.Fields(cue.Definitions(true))
-	for iter.Next() {
-		label := iter.Selector().String()
-		defVal := iter.Value()
-		fmt.Fprintf(&sb, "%s: %v\n\n", label, defVal)
-	}
-
-	return []byte(sb.String())
-}
-
-// LoadedArtifacts holds parsed artifacts from bundle/file loading.
-// All fields are intermediate — consumed during effective policy
-// resolution in NewServer and not passed to ResourceStore.
-type LoadedArtifacts struct {
-	Catalogs map[string]*gemara.ControlCatalog
-	Policies map[string]*gemara.Policy
-	Guidance map[string]*gemara.GuidanceCatalog
-}
-
-// Merge combines another LoadedArtifacts into this one.
-// Returns an error if any artifact ID appears in both.
-func (la *LoadedArtifacts) Merge(other *LoadedArtifacts) error {
-	for id, cat := range other.Catalogs {
-		if _, exists := la.Catalogs[id]; exists {
-			return fmt.Errorf("duplicate artifact id %q across sources", id)
-		}
-		la.Catalogs[id] = cat
-	}
-	for id, pol := range other.Policies {
-		if _, exists := la.Policies[id]; exists {
-			return fmt.Errorf("duplicate artifact id %q across sources", id)
-		}
-		la.Policies[id] = pol
-	}
-	for id, gc := range other.Guidance {
-		la.Guidance[id] = gc
-	}
-	return nil
-}
-
 // loadArtifacts loads and classifies Gemara artifacts from either a file path or OCI reference.
-// For OCI references, it returns both the primary artifact and any imports (bundle).
-// For file paths, it returns the single artifact.
-func loadArtifacts(ctx context.Context, source string, plainHTTP bool) (*LoadedArtifacts, error) {
-	// Parse URI scheme
+func loadArtifacts(ctx context.Context, source string, plainHTTP bool) (*requirement.ArtifactSet, error) {
 	if strings.HasPrefix(source, "file://") {
-		// file:// URI - strip scheme and load local file
 		path := strings.TrimPrefix(source, "file://")
 		return loadFileArtifacts(ctx, path)
 	}
 
 	if strings.HasPrefix(source, "oci://") {
-		// oci:// URI - strip scheme and pull from OCI registry
 		ref := strings.TrimPrefix(source, "oci://")
 		return loadBundleArtifacts(ctx, ref, plainHTTP)
 	}
 
-	// Legacy: No scheme - detect OCI vs file path
 	if isOCIReference(source) {
-		// Pull from OCI registry - returns primary + imports
 		return loadBundleArtifacts(ctx, source, plainHTTP)
 	}
 
-	// Load from local file path - single artifact
 	return loadFileArtifacts(ctx, source)
 }
 
-// loadFileArtifacts loads and classifies a single artifact from a file.
-func loadFileArtifacts(ctx context.Context, path string) (*LoadedArtifacts, error) {
+func loadFileArtifacts(ctx context.Context, path string) (*requirement.ArtifactSet, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Classify the artifact using gemara.Classify
-	artifactSet, err := gemara.Classify(data)
+	result, err := requirement.Classify(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify artifact: %w", err)
-	}
-
-	result := &LoadedArtifacts{
-		Catalogs: make(map[string]*gemara.ControlCatalog),
-		Policies: make(map[string]*gemara.Policy),
-		Guidance: make(map[string]*gemara.GuidanceCatalog),
-	}
-
-	for _, catalog := range artifactSet.ControlCatalogs {
-		result.Catalogs[catalog.Metadata.Id] = &catalog
-	}
-	for _, gc := range artifactSet.GuidanceCatalogs {
-		gc := gc
-		result.Guidance[gc.Metadata.Id] = &gc
-	}
-	for _, policy := range artifactSet.Policies {
-		result.Policies[policy.Metadata.Id] = &policy
 	}
 
 	return result, nil
 }
 
-// loadBundleArtifacts loads and classifies artifacts from an OCI bundle.
-func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool) (*LoadedArtifacts, error) {
-	// Get Docker credentials
+func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool) (*requirement.ArtifactSet, error) {
 	credFunc, err := registry.NewCredentialFunc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load Docker credentials: %w", err)
 	}
 
-	// Create remote repository
 	repo, err := registry.NewRepository(ref, credFunc, plainHTTP)
 	if err != nil {
 		return nil, err
 	}
 
-	// Extract tag from reference
 	tag := registry.ParseTag(ref)
 
-	// Resolve and pull manifest
 	store := memory.New()
 	_, err = oras.Copy(ctx, repo, tag, store, tag, oras.DefaultCopyOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pull from registry: %w", err)
 	}
 
-	// Unpack the Gemara bundle
 	b, err := bundle.Unpack(ctx, store, tag)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unpack bundle: %w", err)
 	}
 
-	// Classify the bundle
-	classified, err := b.Classify()
+	result, err := requirement.ClassifyBundle(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to classify bundle: %w", err)
-	}
-
-	result := &LoadedArtifacts{
-		Catalogs: make(map[string]*gemara.ControlCatalog),
-		Policies: make(map[string]*gemara.Policy),
-		Guidance: make(map[string]*gemara.GuidanceCatalog),
-	}
-
-	if classified.Policy != nil {
-		result.Policies[classified.Policy.Metadata.Id] = classified.Policy
-	}
-	if classified.ControlCatalog != nil {
-		result.Catalogs[classified.ControlCatalog.Metadata.Id] = classified.ControlCatalog
-	}
-	if classified.GuidanceCatalog != nil {
-		result.Guidance[classified.GuidanceCatalog.Metadata.Id] = classified.GuidanceCatalog
-	}
-
-	if classified.Imports != nil {
-		for _, catalog := range classified.Imports.ControlCatalogs {
-			result.Catalogs[catalog.Metadata.Id] = &catalog
-		}
-		for _, gc := range classified.Imports.GuidanceCatalogs {
-			gc := gc
-			result.Guidance[gc.Metadata.Id] = &gc
-		}
 	}
 
 	return result, nil
@@ -505,6 +312,3 @@ func isOCIReference(source string) bool {
 	// Examples: ghcr.io/org/repo:tag, localhost:5000/repo:tag, http://registry/repo
 	return strings.Contains(source, "/") && (strings.Contains(source, ":") || strings.Contains(source, "//"))
 }
-
-// pullCatalogsFromOCI pulls a Gemara catalog and its imports from an OCI registry.
-// Returns a map of catalog name -> catalog data (YAML bytes).

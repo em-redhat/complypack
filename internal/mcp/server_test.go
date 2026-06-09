@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/complytime/complypack/internal/config"
+	"github.com/complytime/complypack/internal/schema"
 	"github.com/complytime/complypack/schemas"
-	"github.com/gemaraproj/go-gemara"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -133,7 +133,7 @@ func TestLoadSchemas(t *testing.T) {
 	}
 
 	t.Run("loads all built-in schemas with CUE values", func(t *testing.T) {
-		schemaMap, cueSchemaMap, err := loadSchemas(ctx, refs)
+		schemaMap, cueSchemaMap, err := loadSchemas(ctx, refs, schema.DefaultRegistry())
 		require.NoError(t, err)
 		require.NotNil(t, schemaMap)
 		require.NotNil(t, cueSchemaMap)
@@ -147,7 +147,7 @@ func TestLoadSchemas(t *testing.T) {
 	})
 
 	t.Run("schema content is valid JSON", func(t *testing.T) {
-		schemaMap, _, err := loadSchemas(ctx, refs)
+		schemaMap, _, err := loadSchemas(ctx, refs, schema.DefaultRegistry())
 		require.NoError(t, err)
 
 		for platform, data := range schemaMap {
@@ -195,41 +195,6 @@ controls:
     title: System Communications Protection
     description: Protect system communications.
 `
-
-func TestLoadedArtifacts_Merge(t *testing.T) {
-	a := &LoadedArtifacts{
-		Catalogs: map[string]*gemara.ControlCatalog{"cat-a": {}},
-		Policies: map[string]*gemara.Policy{},
-		Guidance: map[string]*gemara.GuidanceCatalog{"guide-a": {Metadata: gemara.Metadata{Id: "guide-a"}}},
-	}
-	b := &LoadedArtifacts{
-		Catalogs: map[string]*gemara.ControlCatalog{"cat-b": {}},
-		Policies: map[string]*gemara.Policy{},
-		Guidance: map[string]*gemara.GuidanceCatalog{"guide-b": {Metadata: gemara.Metadata{Id: "guide-b"}}},
-	}
-
-	err := a.Merge(b)
-	require.NoError(t, err)
-	assert.Len(t, a.Catalogs, 2)
-	assert.Len(t, a.Guidance, 2)
-}
-
-func TestLoadedArtifacts_MergeDuplicateID(t *testing.T) {
-	a := &LoadedArtifacts{
-		Catalogs: map[string]*gemara.ControlCatalog{"same-id": {}},
-		Policies: map[string]*gemara.Policy{},
-		Guidance: map[string]*gemara.GuidanceCatalog{},
-	}
-	b := &LoadedArtifacts{
-		Catalogs: map[string]*gemara.ControlCatalog{"same-id": {}},
-		Policies: map[string]*gemara.Policy{},
-		Guidance: map[string]*gemara.GuidanceCatalog{},
-	}
-
-	err := a.Merge(b)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "same-id")
-}
 
 func TestNewServer_MultiSource(t *testing.T) {
 	ctx := context.Background()
