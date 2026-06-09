@@ -17,7 +17,7 @@ import (
 	"github.com/gemaraproj/go-gemara"
 	"github.com/gemaraproj/go-gemara/bundle"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"gopkg.in/yaml.v3"
+
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/memory"
 )
@@ -67,11 +67,53 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Load Gemara catalog(s) from source (file path or OCI reference)
-	// OCI bundles may include imports/extends, so we get a map back
-	artifacts, err := loadArtifacts(ctx, cfg.Gemara.Source, cfg.Gemara.PlainHTTP)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load artifacts from %s: %w", cfg.Gemara.Source, err)
+	// Load Gemara artifacts from all configured sources
+	loaded := &LoadedArtifacts{
+		Catalogs: make(map[string]*gemara.ControlCatalog),
+		Policies: make(map[string]*gemara.Policy),
+		Guidance: make(map[string]*gemara.GuidanceCatalog),
+	}
+	for _, entry := range cfg.Gemara.Sources {
+		src, err := loadArtifacts(ctx, entry.Source, entry.PlainHTTP)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load artifacts from %s: %w", entry.Source, err)
+		}
+		if err := loaded.Merge(src); err != nil {
+			return nil, fmt.Errorf("failed to merge artifacts from %s: %w", entry.Source, err)
+		}
+	}
+
+	// Resolve effective policies. All loaded artifacts are intermediate
+	// state consumed here — only the resolved graphs reach the runtime.
+	var allCatalogs []gemara.ControlCatalog
+	for _, c := range loaded.Catalogs {
+		allCatalogs = append(allCatalogs, *c)
+	}
+	var allGuidance []gemara.GuidanceCatalog
+	for _, gc := range loaded.Guidance {
+		allGuidance = append(allGuidance, *gc)
+	}
+	effectivePolicies := make(map[string]*gemara.EffectivePolicy)
+	for id, policy := range loaded.Policies {
+		if len(allCatalogs) > 0 || len(allGuidance) > 0 {
+			effective, err := gemara.ResolveEffectivePolicy(*policy, allCatalogs, allGuidance)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve effective policy %s: %w", id, err)
+			}
+			effectivePolicies[id] = effective
+		}
+	}
+
+	// Build unified artifact map for MCP resource serving (marshal on demand)
+	allArtifacts := make(map[string]any)
+	for id, c := range loaded.Catalogs {
+		allArtifacts[id] = c
+	}
+	for id, gc := range loaded.Guidance {
+		allArtifacts[id] = gc
+	}
+	for id, p := range loaded.Policies {
+		allArtifacts[id] = p
 	}
 
 	// Load schemas from configured sources (both bytes and compiled CUE)
@@ -86,12 +128,9 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		evalRegistry = evaluator.DefaultRegistry()
 	}
 
-	// Create resource store with parsed artifacts
 	store := NewResourceStore(
-		artifacts.RawCatalogs,
-		artifacts.Catalogs,
-		artifacts.Policies,
-		artifacts.EffectivePolicies,
+		allArtifacts,
+		effectivePolicies,
 		schemaMap,
 		cueSchemaMap,
 		evalRegistry,
@@ -107,12 +146,12 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		Instructions: "ComplyPack MCP Server - provides Gemara catalogs and platform schemas",
 	})
 
-	// Register catalog resources (from raw catalogs for MCP resource serving)
-	for name := range artifacts.RawCatalogs {
+	// Register artifact resources
+	for name := range allArtifacts {
 		uri := fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeCatalog, name)
 		resource := &mcp.Resource{
 			URI:      uri,
-			Name:     fmt.Sprintf("Gemara Catalog: %s", name),
+			Name:     fmt.Sprintf("Gemara Artifact: %s", name),
 			MIMEType: MIMETypeYAML,
 		}
 		mcpServer.AddResource(resource, createResourceHandler(store, uri))
@@ -175,26 +214,6 @@ func createResourceHandler(store *ResourceStore, uri string) mcp.ResourceHandler
 		}
 		return &mcp.ReadResourceResult{Contents: contents}, nil
 	}
-}
-
-// extractCatalogName parses the catalog YAML and extracts metadata.id.
-// Returns error if YAML is invalid or metadata.id is missing.
-func extractCatalogName(data []byte) (string, error) {
-	var parsed struct {
-		Metadata struct {
-			ID string `yaml:"id"`
-		} `yaml:"metadata"`
-	}
-
-	if err := yaml.Unmarshal(data, &parsed); err != nil {
-		return "", fmt.Errorf("failed to parse catalog YAML: %w", err)
-	}
-
-	if parsed.Metadata.ID == "" {
-		return "", fmt.Errorf("catalog missing metadata.id field")
-	}
-
-	return parsed.Metadata.ID, nil
 }
 
 // Run starts the MCP server on the given transport.
@@ -325,12 +344,34 @@ func formatCUEDefinitions(val cue.Value) []byte {
 	return []byte(sb.String())
 }
 
-// LoadedArtifacts holds raw and parsed artifacts from bundle/file loading.
+// LoadedArtifacts holds parsed artifacts from bundle/file loading.
+// All fields are intermediate — consumed during effective policy
+// resolution in NewServer and not passed to ResourceStore.
 type LoadedArtifacts struct {
-	RawCatalogs       map[string][]byte
-	Catalogs          map[string]*gemara.ControlCatalog
-	Policies          map[string]*gemara.Policy
-	EffectivePolicies map[string]*gemara.EffectivePolicy
+	Catalogs map[string]*gemara.ControlCatalog
+	Policies map[string]*gemara.Policy
+	Guidance map[string]*gemara.GuidanceCatalog
+}
+
+// Merge combines another LoadedArtifacts into this one.
+// Returns an error if any artifact ID appears in both.
+func (la *LoadedArtifacts) Merge(other *LoadedArtifacts) error {
+	for id, cat := range other.Catalogs {
+		if _, exists := la.Catalogs[id]; exists {
+			return fmt.Errorf("duplicate artifact id %q across sources", id)
+		}
+		la.Catalogs[id] = cat
+	}
+	for id, pol := range other.Policies {
+		if _, exists := la.Policies[id]; exists {
+			return fmt.Errorf("duplicate artifact id %q across sources", id)
+		}
+		la.Policies[id] = pol
+	}
+	for id, gc := range other.Guidance {
+		la.Guidance[id] = gc
+	}
+	return nil
 }
 
 // loadArtifacts loads and classifies Gemara artifacts from either a file path or OCI reference.
@@ -374,31 +415,20 @@ func loadFileArtifacts(ctx context.Context, path string) (*LoadedArtifacts, erro
 	}
 
 	result := &LoadedArtifacts{
-		RawCatalogs:       make(map[string][]byte),
-		Catalogs:          make(map[string]*gemara.ControlCatalog),
-		Policies:          make(map[string]*gemara.Policy),
-		EffectivePolicies: make(map[string]*gemara.EffectivePolicy),
+		Catalogs: make(map[string]*gemara.ControlCatalog),
+		Policies: make(map[string]*gemara.Policy),
+		Guidance: make(map[string]*gemara.GuidanceCatalog),
 	}
 
-	// Store catalogs
 	for _, catalog := range artifactSet.ControlCatalogs {
-		result.RawCatalogs[catalog.Metadata.Id] = data
 		result.Catalogs[catalog.Metadata.Id] = &catalog
 	}
-
-	// Store policies and resolve effective policies
+	for _, gc := range artifactSet.GuidanceCatalogs {
+		gc := gc
+		result.Guidance[gc.Metadata.Id] = &gc
+	}
 	for _, policy := range artifactSet.Policies {
-		result.RawCatalogs[policy.Metadata.Id] = data
 		result.Policies[policy.Metadata.Id] = &policy
-
-		// Resolve effective policy if there are catalogs/guidance
-		if len(artifactSet.ControlCatalogs) > 0 || len(artifactSet.GuidanceCatalogs) > 0 {
-			effective, err := gemara.ResolveEffectivePolicy(policy, artifactSet.ControlCatalogs, artifactSet.GuidanceCatalogs)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve effective policy: %w", err)
-			}
-			result.EffectivePolicies[policy.Metadata.Id] = effective
-		}
 	}
 
 	return result, nil
@@ -441,59 +471,29 @@ func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool) (*Load
 	}
 
 	result := &LoadedArtifacts{
-		RawCatalogs:       make(map[string][]byte),
-		Catalogs:          make(map[string]*gemara.ControlCatalog),
-		Policies:          make(map[string]*gemara.Policy),
-		EffectivePolicies: make(map[string]*gemara.EffectivePolicy),
+		Catalogs: make(map[string]*gemara.ControlCatalog),
+		Policies: make(map[string]*gemara.Policy),
+		Guidance: make(map[string]*gemara.GuidanceCatalog),
 	}
 
-	// Store primary policy if present
 	if classified.Policy != nil {
-		result.RawCatalogs[classified.Policy.Metadata.Id] = b.Files[0].Data
 		result.Policies[classified.Policy.Metadata.Id] = classified.Policy
 	}
-
-	// Store primary control catalog if present
 	if classified.ControlCatalog != nil {
-		result.RawCatalogs[classified.ControlCatalog.Metadata.Id] = b.Files[0].Data
 		result.Catalogs[classified.ControlCatalog.Metadata.Id] = classified.ControlCatalog
 	}
-
-	// Store import catalogs
-	if classified.Imports != nil {
-		for _, catalog := range classified.Imports.ControlCatalogs {
-			// Find corresponding raw data from bundle imports
-			for _, imp := range b.Imports {
-				if imp.Type == "ControlCatalog" {
-					name, err := extractCatalogName(imp.Data)
-					if err == nil && name == catalog.Metadata.Id {
-						result.RawCatalogs[catalog.Metadata.Id] = imp.Data
-						break
-					}
-				}
-			}
-			result.Catalogs[catalog.Metadata.Id] = &catalog
-		}
+	if classified.GuidanceCatalog != nil {
+		result.Guidance[classified.GuidanceCatalog.Metadata.Id] = classified.GuidanceCatalog
 	}
 
-	// Resolve effective policy if we have a policy
-	if classified.Policy != nil {
-		var catalogs []gemara.ControlCatalog
-		var guidance []gemara.GuidanceCatalog
-
-		if classified.ControlCatalog != nil {
-			catalogs = append(catalogs, *classified.ControlCatalog)
+	if classified.Imports != nil {
+		for _, catalog := range classified.Imports.ControlCatalogs {
+			result.Catalogs[catalog.Metadata.Id] = &catalog
 		}
-		if classified.Imports != nil {
-			catalogs = append(catalogs, classified.Imports.ControlCatalogs...)
-			guidance = append(guidance, classified.Imports.GuidanceCatalogs...)
+		for _, gc := range classified.Imports.GuidanceCatalogs {
+			gc := gc
+			result.Guidance[gc.Metadata.Id] = &gc
 		}
-
-		effective, err := gemara.ResolveEffectivePolicy(*classified.Policy, catalogs, guidance)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve effective policy: %w", err)
-		}
-		result.EffectivePolicies[classified.Policy.Metadata.Id] = effective
 	}
 
 	return result, nil

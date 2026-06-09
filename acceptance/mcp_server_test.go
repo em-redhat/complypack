@@ -12,6 +12,14 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+func byteMapToAny(m map[string][]byte) map[string]any {
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		result[k] = string(v)
+	}
+	return result
+}
+
 var _ = Describe("MCP Server", func() {
 	var (
 		ctx        context.Context
@@ -180,7 +188,7 @@ controls:
 				"kubernetes": []byte(`{"type": "object"}`),
 			}
 
-			store = mcp.NewResourceStore(catalogs, nil, nil, nil, schemas, nil, nil)
+			store = mcp.NewResourceStore(byteMapToAny(catalogs), nil, schemas, nil, nil)
 		})
 
 		It("should list all catalog and schema resources", func() {
@@ -285,7 +293,7 @@ controls:
 			schemas := map[string][]byte{
 				"kubernetes": []byte(`{"type": "object"}`),
 			}
-			store := mcp.NewResourceStore(catalogs, nil, nil, nil, schemas, nil, nil)
+			store := mcp.NewResourceStore(byteMapToAny(catalogs), nil, schemas, nil, nil)
 
 			// List resources
 			resources, err := store.ListResources(ctx)
@@ -295,7 +303,7 @@ controls:
 			// Find catalog resource
 			var catalogURI string
 			for _, res := range resources {
-				if res.MIMEType == "application/yaml" && res.Name == "Gemara Catalog: test-catalog" {
+				if res.MIMEType == "application/yaml" && res.Name == "Gemara Artifact: test-catalog" {
 					catalogURI = res.URI
 					break
 				}
@@ -325,7 +333,7 @@ controls:
 			schemas := map[string][]byte{
 				"kubernetes": []byte(`{"type": "object", "properties": {"kind": {"type": "string"}}}`),
 			}
-			store := mcp.NewResourceStore(map[string][]byte{}, nil, nil, nil, schemas, nil, nil)
+			store := mcp.NewResourceStore(map[string]any{}, nil, schemas, nil, nil)
 
 			// List resources
 			resources, err := store.ListResources(ctx)

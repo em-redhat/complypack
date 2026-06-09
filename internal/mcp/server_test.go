@@ -11,6 +11,7 @@ import (
 
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/schemas"
+	"github.com/gemaraproj/go-gemara"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,8 +54,8 @@ schemas:
 		// Verify resource store has catalog
 		store := srv.ResourceStore
 		require.NotNil(t, store)
-		assert.Len(t, store.catalogs, 1)
-		assert.Contains(t, store.catalogs, "controls-v1")
+		assert.Len(t, store.artifacts, 1)
+		assert.Contains(t, store.artifacts, "controls-v1")
 
 		// Verify schemas loaded
 		assert.NotEmpty(t, store.schemas)
@@ -122,49 +123,6 @@ schemas:
 	// Removed: duplicate catalog test - no longer applicable with single source config
 }
 
-func TestExtractCatalogName(t *testing.T) {
-	tests := []struct {
-		name     string
-		yaml     string
-		expected string
-		wantErr  bool
-	}{
-		{
-			name: "from metadata.id",
-			yaml: `metadata:
-  id: my-catalog
-  version: 1.0`,
-			expected: "my-catalog",
-			wantErr:  false,
-		},
-		{
-			name: "missing metadata.id",
-			yaml: `metadata:
-  version: 1.0`,
-			expected: "",
-			wantErr:  true,
-		},
-		{
-			name:     "invalid YAML",
-			yaml:     `invalid: [unclosed`,
-			expected: "",
-			wantErr:  true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := extractCatalogName([]byte(tt.yaml))
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
-			}
-		})
-	}
-}
-
 func TestLoadSchemas(t *testing.T) {
 	ctx := context.Background()
 
@@ -226,3 +184,95 @@ controls:
     title: Access Control Policy
     description: Develop and maintain access control policy.
 `
+
+// mockControlsCatalogV2 is a second catalog with a different metadata.id for multi-source testing.
+const mockControlsCatalogV2 = `metadata:
+  id: controls-v2
+  type: ControlCatalog
+  gemara-version: "1.0.0"
+controls:
+  - id: SC-1
+    title: System Communications Protection
+    description: Protect system communications.
+`
+
+func TestLoadedArtifacts_Merge(t *testing.T) {
+	a := &LoadedArtifacts{
+		Catalogs: map[string]*gemara.ControlCatalog{"cat-a": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{"guide-a": {Metadata: gemara.Metadata{Id: "guide-a"}}},
+	}
+	b := &LoadedArtifacts{
+		Catalogs: map[string]*gemara.ControlCatalog{"cat-b": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{"guide-b": {Metadata: gemara.Metadata{Id: "guide-b"}}},
+	}
+
+	err := a.Merge(b)
+	require.NoError(t, err)
+	assert.Len(t, a.Catalogs, 2)
+	assert.Len(t, a.Guidance, 2)
+}
+
+func TestLoadedArtifacts_MergeDuplicateID(t *testing.T) {
+	a := &LoadedArtifacts{
+		Catalogs: map[string]*gemara.ControlCatalog{"same-id": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{},
+	}
+	b := &LoadedArtifacts{
+		Catalogs: map[string]*gemara.ControlCatalog{"same-id": {}},
+		Policies: map[string]*gemara.Policy{},
+		Guidance: map[string]*gemara.GuidanceCatalog{},
+	}
+
+	err := a.Merge(b)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "same-id")
+}
+
+func TestNewServer_MultiSource(t *testing.T) {
+	ctx := context.Background()
+
+	cacheDir := t.TempDir()
+	ociStore := t.TempDir()
+
+	// Create two separate catalog files with different metadata.id values
+	createMockCatalogBundle(t, ociStore, "source-a", map[string]string{
+		"catalog.yaml": mockControlsCatalog,
+	})
+	createMockCatalogBundle(t, ociStore, "source-b", map[string]string{
+		"catalog.yaml": mockControlsCatalogV2,
+	})
+
+	sourceA := filepath.Join(ociStore, "source-a", "catalog.yaml")
+	sourceB := filepath.Join(ociStore, "source-b", "catalog.yaml")
+
+	configPath := filepath.Join(t.TempDir(), "complypack.yaml")
+	configYAML := `evaluator-id: opa
+version: 0.1.0
+gemara:
+  sources:
+    - source: ` + sourceA + `
+    - source: ` + sourceB + `
+schemas:
+  - platform: kubernetes
+`
+	err := os.WriteFile(configPath, []byte(configYAML), 0600)
+	require.NoError(t, err)
+
+	srv, err := NewServer(ctx, &ServerOptions{
+		ConfigPath: configPath,
+		OCIStore:   ociStore,
+		CacheDir:   cacheDir,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, srv)
+
+	store := srv.ResourceStore
+	require.NotNil(t, store)
+	assert.Len(t, store.artifacts, 2)
+	assert.Contains(t, store.artifacts, "controls-v1")
+	assert.Contains(t, store.artifacts, "controls-v2")
+}
