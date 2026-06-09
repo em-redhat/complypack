@@ -18,7 +18,7 @@ gemara:
   sources:
     - source: file://./catalogs/my-controls.yaml
     # Add more sources as needed:
-    # - source: file://./guidance/iso-42001.yaml
+    # - source: file://./guidance/nist-800-53.yaml
     # - source: oci://ghcr.io/org/controls:v1
     #   plain-http: true
   # Legacy single-source format (still supported):
