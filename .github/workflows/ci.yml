@@ -67,7 +67,7 @@ jobs:
 
   call_reusable_vuln_scan:
     name: Vulnerability Scan
-    uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@d35e6fc04dd11151a92522287782344aaea91388 # main
+    uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@e30c5cd87e7aeddb8aa7bfeccff4d362bd886270 # main
     permissions:
       contents: read
       actions: read
