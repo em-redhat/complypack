@@ -8,7 +8,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/onsi/ginkgo/v2 v2.29.0
-	github.com/onsi/gomega v1.41.0
+	github.com/onsi/gomega v1.42.0
 	github.com/open-policy-agent/opa v1.17.0
 	github.com/open-policy-agent/regal v0.41.1
 	github.com/opencontainers/go-digest v1.0.0
