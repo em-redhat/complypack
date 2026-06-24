@@ -86,3 +86,15 @@ func (rp *ResolvedPolicy) ControlIDs() []string {
 func (rp *ResolvedPolicy) ParametersForRequirement(reqID string) []gemara.Parameter {
 	return rp.paramIndex[reqID]
 }
+
+// ImportedGuidanceIDs returns the metadata IDs of guidance catalogs
+// imported by this policy. Guidance catalogs loaded in the artifact set
+// but not in this list are "under evaluation" — available for crosswalk
+// but not mandated.
+func (rp *ResolvedPolicy) ImportedGuidanceIDs() []string {
+	ids := make([]string, 0, len(rp.GuidanceCatalogs))
+	for _, gc := range rp.GuidanceCatalogs {
+		ids = append(ids, gc.Metadata.Id)
+	}
+	return ids
+}

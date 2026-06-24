@@ -12,6 +12,7 @@ import (
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/complytime/complypack/internal/requirement"
 	"github.com/complytime/complypack/internal/schema"
+	"github.com/gemaraproj/go-gemara"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"gopkg.in/yaml.v3"
 )
@@ -56,10 +57,11 @@ func (rs *ResourceStore) CUESchema(platform string) (cue.Value, error) {
 func (rs *ResourceStore) ListResources(ctx context.Context) ([]mcp.Resource, error) {
 	var resources []mcp.Resource
 
-	for name := range rs.artifacts {
+	for name, artifact := range rs.artifacts {
+		kind := artifactKind(artifact)
 		resources = append(resources, mcp.Resource{
 			URI:      fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeCatalog, name),
-			Name:     fmt.Sprintf("Gemara Artifact: %s", name),
+			Name:     fmt.Sprintf("Gemara %s: %s", kind, name),
 			MIMEType: MIMETypeYAML,
 		})
 	}
@@ -118,6 +120,24 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 			Text:     string(data),
 		}}, nil
 
+	case ResourceTypeMapping:
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid URI format: %s", uri)
+		}
+		artifact, ok := rs.artifacts[parts[1]]
+		if !ok {
+			return nil, fmt.Errorf("mapping document %q not found", parts[1])
+		}
+		data, err := yaml.Marshal(artifact)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal mapping document %q: %w", parts[1], err)
+		}
+		return []*mcp.ResourceContents{{
+			URI:      uri,
+			MIMEType: MIMETypeYAML,
+			Text:     string(data),
+		}}, nil
+
 	case ResourceTypeSchema:
 		if len(parts) == 1 || parts[1] == "" {
 			return rs.readSchemaListResource(uri)
@@ -138,6 +158,21 @@ func (rs *ResourceStore) ReadResource(ctx context.Context, uri string) ([]*mcp.R
 
 	default:
 		return nil, fmt.Errorf("unknown resource type: %s", resourceType)
+	}
+}
+
+func artifactKind(artifact any) string {
+	switch artifact.(type) {
+	case *gemara.Policy:
+		return "Policy"
+	case *gemara.ControlCatalog:
+		return "ControlCatalog"
+	case *gemara.GuidanceCatalog:
+		return "GuidanceCatalog"
+	case *gemara.MappingDocument:
+		return "MappingDocument"
+	default:
+		return "Artifact"
 	}
 }
 

@@ -28,9 +28,11 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
-# Local docs (plans, analysis)
+# Local docs (plans, analysis, specs, demos)
 docs/plans/
 docs/analysis/
+docs/superpowers/
+docs/demo/
 
 # Development tooling
 .opencode/

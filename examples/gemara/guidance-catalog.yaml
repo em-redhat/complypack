@@ -1,0 +1,42 @@
+title: Container Security Guidance
+metadata:
+  id: container-security-guidance
+  type: GuidanceCatalog
+  gemara-version: v1.0.0
+  description: Best practice guidance for securing container workloads, covering TLS hardening and certificate lifecycle.
+  author:
+    id: complypack-examples
+    name: ComplyPack Examples
+    type: Software Assisted
+groups:
+  - id: transport-security
+    title: Transport Security
+    description: Guidance for encrypting data in transit between containerized services.
+  - id: identity
+    title: Identity and Certificates
+    description: Guidance for managing certificates and trust chains in container environments.
+type: Best Practice
+guidelines:
+  - id: GL-TLS-001
+    title: Enforce Minimum TLS Version
+    objective: Prevent protocol downgrade attacks by configuring services to reject connections using outdated TLS versions.
+    group: transport-security
+    recommendations:
+      - Configure ingress controllers and service meshes to require TLS 1.2 or higher.
+      - Disable SSLv3, TLS 1.0, and TLS 1.1 at the load balancer and application layers.
+    rationale:
+      importance: Outdated TLS versions contain known vulnerabilities that allow interception of encrypted traffic.
+      goals:
+        - Eliminate use of deprecated TLS protocol versions across all container endpoints.
+  - id: GL-CERT-001
+    title: Automate Certificate Rotation
+    objective: Reduce the risk of expired or compromised certificates by automating issuance and renewal.
+    group: identity
+    recommendations:
+      - Use a certificate manager (e.g., cert-manager) to automate issuance and renewal.
+      - Set certificate validity to 90 days or less to limit exposure from compromised keys.
+    rationale:
+      importance: Manual certificate management leads to outages from expired certificates and increases the window of exposure for compromised keys.
+      goals:
+        - Ensure certificates are renewed automatically before expiry.
+        - Reduce mean time to rotate compromised certificates.

@@ -14,6 +14,7 @@ type ArtifactSet struct {
 	Catalogs map[string]*gemara.ControlCatalog
 	Policies map[string]*gemara.Policy
 	Guidance map[string]*gemara.GuidanceCatalog
+	Mappings map[string]*gemara.MappingDocument
 }
 
 // NewArtifactSet returns an initialized ArtifactSet.
@@ -22,6 +23,7 @@ func NewArtifactSet() *ArtifactSet {
 		Catalogs: make(map[string]*gemara.ControlCatalog),
 		Policies: make(map[string]*gemara.Policy),
 		Guidance: make(map[string]*gemara.GuidanceCatalog),
+		Mappings: make(map[string]*gemara.MappingDocument),
 	}
 }
 
@@ -52,6 +54,12 @@ func Classify(data ...[]byte) (*ArtifactSet, error) {
 				return nil, fmt.Errorf("artifact %d (GuidanceCatalog): %w", i, err)
 			}
 			as.Guidance[gc.Metadata.Id] = &gc
+		case gemara.MappingDocumentArtifact:
+			var md gemara.MappingDocument
+			if err := goyaml.Unmarshal(d, &md); err != nil {
+				return nil, fmt.Errorf("artifact %d (MappingDocument): %w", i, err)
+			}
+			as.Mappings[md.Metadata.Id] = &md
 		}
 	}
 	return as, nil
@@ -77,6 +85,12 @@ func (as *ArtifactSet) Merge(other *ArtifactSet) error {
 			return fmt.Errorf("duplicate artifact id %q across sources", id)
 		}
 		as.Guidance[id] = gc
+	}
+	for id, md := range other.Mappings {
+		if _, exists := as.Mappings[id]; exists {
+			return fmt.Errorf("duplicate artifact id %q across sources", id)
+		}
+		as.Mappings[id] = md
 	}
 	return nil
 }

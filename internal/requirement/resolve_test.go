@@ -59,6 +59,7 @@ func testArtifactSet() *ArtifactSet {
 		Catalogs: map[string]*gemara.ControlCatalog{"test-catalog": catalog},
 		Policies: map[string]*gemara.Policy{"test-policy": policy},
 		Guidance: make(map[string]*gemara.GuidanceCatalog),
+		Mappings: make(map[string]*gemara.MappingDocument),
 	}
 }
 

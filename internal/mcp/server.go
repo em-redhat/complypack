@@ -113,6 +113,9 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 	for id, p := range loaded.Policies {
 		allArtifacts[id] = p
 	}
+	for id, md := range loaded.Mappings {
+		allArtifacts[id] = md
+	}
 
 	// Load schemas from configured sources
 	schemaReg := schema.DefaultRegistry()
@@ -151,6 +154,17 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 		resource := &mcp.Resource{
 			URI:      uri,
 			Name:     fmt.Sprintf("Gemara Artifact: %s", name),
+			MIMEType: MIMETypeYAML,
+		}
+		mcpServer.AddResource(resource, createResourceHandler(store, uri))
+	}
+
+	// Register mapping document resources
+	for name := range loaded.Mappings {
+		uri := fmt.Sprintf("%s://%s/%s", URIScheme, ResourceTypeMapping, name)
+		resource := &mcp.Resource{
+			URI:      uri,
+			Name:     fmt.Sprintf("Gemara Mapping Document: %s", name),
 			MIMEType: MIMETypeYAML,
 		}
 		mcpServer.AddResource(resource, createResourceHandler(store, uri))
@@ -197,6 +211,9 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 
 	assessmentTool := createGetAssessmentRequirementsTool()
 	mcpServer.AddTool(assessmentTool, handleGetAssessmentRequirements(store))
+
+	deltaTool := createAnalyzeParameterDeltaTool()
+	mcpServer.AddTool(deltaTool, handleAnalyzeParameterDelta(store, loaded))
 
 	return &Server{
 		mcp:           mcpServer,

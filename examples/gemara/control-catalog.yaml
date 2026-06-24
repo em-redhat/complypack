@@ -1,0 +1,53 @@
+title: Container Security Controls
+metadata:
+  id: container-security-controls
+  type: ControlCatalog
+  gemara-version: v1.0.0
+  description: Baseline security controls for container workloads covering TLS configuration and certificate lifecycle management.
+  author:
+    id: complypack-examples
+    name: ComplyPack Examples
+    type: Software Assisted
+  applicability-groups:
+    - id: kubernetes
+      title: Kubernetes Workloads
+      description: Controls applicable to workloads running on Kubernetes clusters.
+    - id: docker
+      title: Docker Containers
+      description: Controls applicable to standalone Docker container deployments.
+groups:
+  - id: transport-security
+    title: Transport Security
+    description: Controls governing encryption of data in transit between services.
+  - id: identity
+    title: Identity and Certificates
+    description: Controls governing certificate issuance, rotation, and trust chain management.
+controls:
+  - id: CTL-TLS-001
+    title: TLS Configuration
+    objective: Ensure all service-to-service and external communication uses a minimum TLS version to prevent protocol downgrade attacks.
+    group: transport-security
+    assessment-requirements:
+      - id: CTL-TLS-001-AR1
+        text: TLS minimum version MUST be enforced for all ingress endpoints.
+        applicability:
+          - kubernetes
+          - docker
+      - id: CTL-TLS-001-AR2
+        text: Cipher suites MUST be restricted to approved algorithms only.
+        applicability:
+          - kubernetes
+  - id: CTL-CERT-001
+    title: Certificate Management
+    objective: Ensure certificates are issued by trusted authorities and rotated before expiry to maintain chain-of-trust integrity.
+    group: identity
+    assessment-requirements:
+      - id: CTL-CERT-001-AR1
+        text: Certificate validity period MUST NOT exceed the maximum allowed duration.
+        applicability:
+          - kubernetes
+          - docker
+      - id: CTL-CERT-001-AR2
+        text: Certificates MUST be issued by an approved certificate authority.
+        applicability:
+          - kubernetes

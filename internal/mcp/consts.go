@@ -8,6 +8,7 @@ const (
 
 	// Resource types
 	ResourceTypeCatalog   = "catalog"
+	ResourceTypeMapping   = "mapping"
 	ResourceTypeSchema    = "schema"
 	ResourceTypeEvaluator = "evaluator"
 

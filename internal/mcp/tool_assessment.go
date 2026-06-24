@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/complytime/complypack/internal/requirement"
+	"github.com/gemaraproj/go-gemara"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -27,6 +28,13 @@ func createGetAssessmentRequirementsTool() *mcp.Tool {
 				"controlId": map[string]interface{}{
 					"type":        "string",
 					"description": "Optional: Specific control ID to filter requirements (e.g., 'CTRL-001')",
+				},
+				"scope": map[string]interface{}{
+					"type": "array",
+					"items": map[string]interface{}{
+						"type": "string",
+					},
+					"description": "Optional: Filter requirements by applicability groups (e.g., ['maturity-1', 'maturity-2']). Returns requirements whose applicability contains any of the given values.",
 				},
 			},
 			"required": []interface{}{"catalogName"},
@@ -48,8 +56,9 @@ func handleGetAssessmentRequirements(store *ResourceStore) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Parse input
 		var input struct {
-			CatalogName string `json:"catalogName"`
-			ControlID   string `json:"controlId"`
+			CatalogName string   `json:"catalogName"`
+			ControlID   string   `json:"controlId"`
+			Scope       []string `json:"scope"`
 		}
 
 		if err := json.Unmarshal(req.Params.Arguments, &input); err != nil {
@@ -58,14 +67,18 @@ func handleGetAssessmentRequirements(store *ResourceStore) mcp.ToolHandler {
 
 		rp, found := store.resolved[input.CatalogName]
 		if !found {
-			return nil, fmt.Errorf("policy %q not found", input.CatalogName)
+			rp, found = resolveFromCatalog(store, input.CatalogName)
+			if !found {
+				return nil, fmt.Errorf("policy or catalog %q not found", input.CatalogName)
+			}
 		}
-		requirements := extractFromResolvedPolicy(rp, input.ControlID)
+		requirements := extractFromResolvedPolicy(rp, input.ControlID, input.Scope)
 
 		// Build response
 		responseData, err := json.Marshal(map[string]interface{}{
 			"catalog":      input.CatalogName,
 			"control_id":   input.ControlID,
+			"scope":        input.Scope,
 			"count":        len(requirements),
 			"requirements": requirements,
 		})
@@ -83,8 +96,41 @@ func handleGetAssessmentRequirements(store *ResourceStore) mcp.ToolHandler {
 	}
 }
 
+// resolveFromCatalog wraps a bare catalog in a synthetic ResolvedPolicy so
+// get_assessment_requirements works with catalog names, not just policy names.
+func resolveFromCatalog(store *ResourceStore, name string) (*requirement.ResolvedPolicy, bool) {
+	art, ok := store.artifacts[name]
+	if !ok {
+		return nil, false
+	}
+	cat, ok := art.(*gemara.ControlCatalog)
+	if !ok {
+		return nil, false
+	}
+	set := &requirement.ArtifactSet{
+		Catalogs: map[string]*gemara.ControlCatalog{name: cat},
+		Policies: make(map[string]*gemara.Policy),
+		Guidance: make(map[string]*gemara.GuidanceCatalog),
+		Mappings: make(map[string]*gemara.MappingDocument),
+	}
+	syntheticPolicy := gemara.Policy{
+		Metadata: gemara.Metadata{
+			Id:                name + "-synthetic",
+			MappingReferences: []gemara.MappingReference{{Id: name}},
+		},
+		Imports: gemara.Imports{
+			Catalogs: []gemara.CatalogImport{{ReferenceId: name}},
+		},
+	}
+	rp, err := requirement.ResolvePolicy(syntheticPolicy, set)
+	if err != nil {
+		return nil, false
+	}
+	return rp, true
+}
+
 // extractFromResolvedPolicy extracts requirements from a resolved policy graph.
-func extractFromResolvedPolicy(rp *requirement.ResolvedPolicy, filterControlID string) []AssessmentRequirementInfo {
+func extractFromResolvedPolicy(rp *requirement.ResolvedPolicy, filterControlID string, filterScope []string) []AssessmentRequirementInfo {
 	var results []AssessmentRequirementInfo
 
 	controlIDs := rp.ControlIDs()
@@ -94,6 +140,9 @@ func extractFromResolvedPolicy(rp *requirement.ResolvedPolicy, filterControlID s
 
 	for _, controlID := range controlIDs {
 		for _, req := range rp.RequirementsForControl(controlID) {
+			if len(filterScope) > 0 && !applicabilityIntersects(req.Applicability, filterScope) {
+				continue
+			}
 			info := AssessmentRequirementInfo{
 				ID:            req.Id,
 				ControlID:     controlID,
@@ -118,6 +167,17 @@ func extractFromResolvedPolicy(rp *requirement.ResolvedPolicy, filterControlID s
 	}
 
 	return results
+}
+
+func applicabilityIntersects(applicability, scope []string) bool {
+	for _, a := range applicability {
+		for _, s := range scope {
+			if a == s {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GetAssessmentRequirementsHandler returns the handler (for testing).
