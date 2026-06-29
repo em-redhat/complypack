@@ -21,7 +21,7 @@ go build -o complypack ./cmd/complypack
   --source file://./examples/gemara/control-catalog.yaml \
   --source file://./examples/gemara/policy.yaml \
   --source file://./examples/gemara/guidance-catalog.yaml \
-  --schema kubernetes
+  --schema kubernetes-deployment
 ```
 
 ## Testing with Claude Code
@@ -37,7 +37,7 @@ Add to `.claude/settings.json` under `mcpServers`:
       "--source", "file://./examples/gemara/control-catalog.yaml",
       "--source", "file://./examples/gemara/policy.yaml",
       "--source", "file://./examples/gemara/guidance-catalog.yaml",
-      "--schema", "kubernetes"
+      "--schema", "kubernetes-deployment"
     ]
   }
 }

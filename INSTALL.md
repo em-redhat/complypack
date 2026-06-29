@@ -27,7 +27,7 @@ The skill is auto-discovered. To configure the MCP server, create a
                "ghcr.io/complytime/complypack:latest",
                "mcp", "serve",
                "--source", "oci://your-registry/gemara/your-catalog:v1",
-               "--schema", "ci"]
+               "--schema", "ci-github-actions"]
     }
   }
 }
@@ -44,8 +44,8 @@ references and target platforms.
          "mcp", "serve",
          "--source", "oci://registry.example.com/gemara/controls:v1",
          "--source", "oci://registry.example.com/gemara/guidance:v1",
-         "--schema", "ci=cue://cue.dev/x/githubactions@v0#Workflow",
-         "--schema", "kubernetes"]
+         "--schema", "ci-github-actions",
+         "--schema", "kubernetes-deployment"]
 ```
 
 ### Plain HTTP registries (development)
@@ -69,7 +69,7 @@ Add to your `opencode.json`:
                "ghcr.io/complytime/complypack:latest",
                "mcp", "serve",
                "--source", "oci://your-registry/gemara/your-catalog:v1",
-               "--schema", "ci"]
+               "--schema", "ci-github-actions"]
     }
   }
 }
@@ -96,12 +96,22 @@ gh attestation verify oci://ghcr.io/complytime/complypack:latest \
   --owner complytime
 ```
 
-## Embedded schemas
+## Built-in schemas
 
-These platforms have built-in schemas (no `--schema source` needed):
+These platforms are in the schema index (no explicit source needed):
 
-- `kubernetes`
-- `terraform`
-- `docker`
-- `ansible`
-- `ci`
+**CI/CD:**
+- `ci-github-actions`
+- `ci-gitlab`
+- `ci-azure-pipelines`
+
+**Kubernetes** (per resource type):
+- `kubernetes-deployment`, `kubernetes-pod`, `kubernetes-daemonset`,
+  `kubernetes-statefulset`, `kubernetes-cronjob`, `kubernetes-job`,
+  `kubernetes-service`, `kubernetes-networkpolicy`, `kubernetes-ingress`,
+  `kubernetes-role`, `kubernetes-clusterrole`, `kubernetes-rolebinding`,
+  `kubernetes-clusterrolebinding`, `kubernetes-serviceaccount`,
+  `kubernetes-configmap`, `kubernetes-secret`, `kubernetes-namespace`
+
+Custom platforms (e.g., terraform, docker, ansible) can be registered with
+`--schema <name>=<source>` or via `complypack.yaml`.

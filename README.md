@@ -50,11 +50,11 @@ gemara:
   source: oci://ghcr.io/org/controls:v1
 
 # Platform schemas (for MCP server validation tools)
+# Built-in platforms: ci-github-actions, ci-gitlab, ci-azure-pipelines,
+# kubernetes-deployment, kubernetes-pod, etc. (see schemas/index.yaml)
 schemas:
-  - platform: kubernetes
-    source: cue://cue.dev/x/k8s.io/api/core/v1
-  - platform: ci
-    source: cue://cue.dev/x/gitlab/gitlabci
+  - platform: kubernetes-deployment
+  - platform: ci-github-actions
 ```
 
 See `complypack.example.yaml` for full configuration options.

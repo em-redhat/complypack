@@ -9,7 +9,7 @@ import (
 
 // SchemaRef represents a platform schema with its source and platform identifier.
 type SchemaRef struct {
-	// Platform identifies the target platform (e.g., "kubernetes", "terraform")
+	// Platform identifies the target platform (e.g., "kubernetes-deployment", "ci-github-actions")
 	Platform string `yaml:"platform"`
 
 	// Source is a URI specifying where to load the schema from.
@@ -17,7 +17,7 @@ type SchemaRef struct {
 	//   - cue://module.path          -> CUE registry module
 	//   - https://example.com/s.json -> HTTP(S) download
 	//   - file://./path/to/file      -> Local file
-	// If empty, falls back to embedded schemas.
+	// If empty, falls back to index defaults.
 	Source string `yaml:"source,omitempty"`
 
 	// Path is deprecated - use Source with file:// scheme instead.

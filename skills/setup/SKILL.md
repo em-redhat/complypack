@@ -34,9 +34,9 @@ At least one source is required.
 
 Ask which platform schemas to load:
 
-- `kubernetes` (embedded)
-- `ci` (embedded)
-- `ci=cue://cue.dev/x/githubactions@v0#Workflow` (CUE registry)
+- `ci-github-actions`, `ci-gitlab`, `ci-azure-pipelines` (built-in)
+- `kubernetes-deployment`, `kubernetes-pod`, etc. (built-in, per resource type)
+- `terraform=https://example.com/terraform.json` (custom, explicit source)
 
 ### Step 4: Resolve Versions
 

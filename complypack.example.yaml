@@ -25,26 +25,30 @@ gemara:
   # source: file://./catalogs/my-controls.yaml
 
 # Platform schemas - multiple source types supported
+# Built-in platforms are listed in schemas/index.yaml (e.g., ci-github-actions,
+# kubernetes-deployment). Custom platforms can be registered with an explicit source.
 schemas:
-  # CUE registry module (fetches from cue.dev registry)
-  - platform: kubernetes
-    source: cue://cue.dev/x/k8s.io/api/core/v1
+  # Built-in platform (source resolved from schema index)
+  - platform: ci-github-actions
 
-  # HTTPS download
+  # Built-in Kubernetes resource type
+  - platform: kubernetes-deployment
+
+  # Explicit CUE registry source (overrides index or registers custom platform)
+  - platform: ci-gitlab
+    source: cue://cue.dev/x/gitlab/gitlabci#Pipeline
+
+  # HTTPS download (custom platform)
   - platform: terraform
     source: https://example.com/schemas/terraform.json
 
-  # Local file (JSON or CUE)
+  # Local file (custom platform)
   - platform: docker
     source: file://./schemas/docker.cue
 
-  # Embedded fallback (no source specified)
-  - platform: ansible
-    # No source = uses embedded schema
-
   # Legacy path syntax (backward compatible)
-  - platform: ci
-    path: ./schemas/ci.cue
+  - platform: my-custom
+    path: ./schemas/custom.cue
 
 # Optional: policy generation directories
 policies:
