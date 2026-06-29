@@ -305,7 +305,7 @@ func loadFileArtifacts(ctx context.Context, path string) (*requirement.ArtifactS
 func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool) (*requirement.ArtifactSet, error) {
 	credFunc, err := registry.NewCredentialFunc()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load Docker credentials: %w", err)
+		return nil, fmt.Errorf("failed to load registry credentials: %w", err)
 	}
 
 	repo, err := registry.NewRepository(ref, credFunc, plainHTTP)
