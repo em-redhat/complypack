@@ -1,5 +1,5 @@
 ---
-name: comply-mapping
+name: mapping
 description: Crosswalk frameworks and perform parameter harmonization. Parent Policy always sets the floor.
 user-invocable: false
 ---

@@ -1,5 +1,5 @@
 ---
-name: comply-adherence
+name: adherence
 description: Populate a Gemara Policy defining what controls apply, with what parameter values, and how evidence will be collected
 user-invocable: false
 ---
@@ -37,11 +37,33 @@ From the delta report's `sources`, build `mapping_references`:
 
 ### Step 4: Build Assessment Plans
 
+#### 4a: Identify the trusted evaluator
+
+Ask the user: "Who is the trusted evaluator for automated assessments?" Read `complypack://evaluator` to see available evaluators. Collect:
+- `id` — evaluator plugin identifier
+- `name` — display name
+- `type` — `Software`
+- `version` — evaluator version
+
+This becomes the **default** executor for all automated plans, set as a global evaluation method on `adherence.evaluation-methods`. Individual assessment plans can override this with their own `evaluation-methods` and `executor` when a specific requirement needs a different evaluator or mode.
+
+#### 4b: Triage requirements by automation eligibility
+
+For each requirement from `get_assessment_requirements`, check its `applicability` array for a group ID indicating automation eligibility. Read `metadata.applicability-groups` from the catalog to understand what groups exist and which one designates automatable requirements.
+
+- **Automatable** (applicability includes the automation group): assessment plan inherits the global `mode: Automated` and executor — no per-plan `evaluation-methods` needed unless overriding
+- **Not automatable**: assessment plan overrides with per-plan `evaluation-methods` set to `mode: Manual`, no executor
+- **No automation group in catalog**: ask the user to classify each requirement as automated or manual
+
+The user may also override any individual plan's evaluation method and executor. Present the triage results and ask if any plans need a different evaluator or mode before compiling.
+
+#### 4c: Build each plan
+
 Group by `requirement-id`. Each plan:
 - `id` — unique plan identifier
 - `requirement-id` — the assessment requirement this plan addresses
 - `frequency` (e.g., "30d", "90d", "365d")
-- `evaluation-methods` — list of `{id, type: Behavioral|Intent, mode: Automated|Manual}`
+- `evaluation-methods` — only when overriding the global default (e.g., manual plans or plans with a different executor)
 - `evidence-requirements` — what evidence is collected
 - `parameters` — frozen values from harmonization, each with `id`, `label`, `accepted-values`, `description`
 
@@ -79,20 +101,50 @@ imports:
   guidance:
     - reference-id: <ref-id>
 adherence:
+  # Global default: applies to all plans unless overridden
+  evaluation-methods:
+    - id: default-eval
+      type: Behavioral
+      mode: Automated
+      executor:
+        id: <evaluator-id>
+        name: <evaluator-name>
+        type: Software
+        version: "<evaluator-version>"
   assessment-plans:
+    # Automated plan — inherits global evaluation-methods and executor
     - id: <plan-id>
       requirement-id: "<req-id>"
       frequency: "<cadence>"
-      evaluation-methods:
-        - id: <method-id>
-          type: Behavioral
-          mode: Automated
       evidence-requirements: "<what>"
       parameters:
         - id: <param-id>
           label: "<label>"
           accepted-values: ["<value>"]
           description: "<rationale>"
+    # Manual plan — overrides global with per-plan evaluation-methods
+    - id: <plan-id-manual>
+      requirement-id: "<req-id-manual>"
+      frequency: "<cadence>"
+      evaluation-methods:
+        - id: manual-review
+          type: Intent
+          mode: Manual
+      evidence-requirements: "<what>"
+    # Plan with different executor — overrides global with per-plan executor
+    - id: <plan-id-custom>
+      requirement-id: "<req-id-custom>"
+      frequency: "<cadence>"
+      evaluation-methods:
+        - id: custom-eval
+          type: Behavioral
+          mode: Automated
+          executor:
+            id: <other-evaluator-id>
+            name: <other-evaluator-name>
+            type: Software
+            version: "<other-evaluator-version>"
+      evidence-requirements: "<what>"
 ```
 
 Use `scope.in.groups` for applicability groups from the scoping stage (e.g., maturity levels, risk tiers). This scopes the policy to only the controls that match those groups.
@@ -103,9 +155,17 @@ Write `.complytime/child-policy.yaml`. If the Gemara MCP server is available, va
 
 ### Step 7: Present Summary
 
-Show mapping references, imported catalogs/guidance, assessment plans count, and audit strengths.
+Show mapping references, imported catalogs/guidance, and the automation split:
 
-> "Policy written to `.complytime/child-policy.yaml`. Invoke `/comply:pack` to generate assessment logic."
+```
+Policy written to .complytime/child-policy.yaml
+
+Assessment plans: 12 total
+  Automated (evaluator: <evaluator-name>): 8 requirements
+  Manual: 4 requirements
+
+Invoke /comply:pack-assessment to generate assessment logic for the 8 automated requirements.
+```
 
 ## MCP Resources and Tools
 
@@ -121,3 +181,7 @@ Show mapping references, imported catalogs/guidance, assessment plans count, and
 - [ ] Every assessment plan has frequency and evaluation method?
 - [ ] Every value came from MCP or the delta report?
 - [ ] Did you use `get_assessment_requirements`, not parse files?
+- [ ] Did you check each requirement's applicability for automation eligibility?
+- [ ] Does `adherence.evaluation-methods` have an executor with the user-identified trusted evaluator?
+- [ ] Did you ask the user to identify the trusted evaluator?
+- [ ] Did you present the triage results and ask if any plans need a different evaluator or mode?
