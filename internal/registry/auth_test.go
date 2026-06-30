@@ -12,61 +12,27 @@ import (
 	"oras.land/oras-go/v2/registry/remote/auth"
 )
 
-func TestCredentialPaths(t *testing.T) {
-	// Save and unset env vars that affect path resolution.
-	// t.Setenv restores them automatically after the test.
-
-	t.Run("default Docker path from HOME", func(t *testing.T) {
-		t.Setenv(dockerConfigDirEnv, "")
+func TestPodmanPaths(t *testing.T) {
+	t.Run("no XDG_RUNTIME_DIR returns only Podman config path", func(t *testing.T) {
 		t.Setenv(xdgRuntimeDirEnv, "")
 
-		paths := credentialPaths()
-		if len(paths) < 1 {
-			t.Fatal("expected at least one path (Docker default)")
+		paths := podmanPaths()
+		if len(paths) != 1 {
+			t.Fatalf("expected 1 path, got %d: %v", len(paths), paths)
 		}
 
-		homeDir, _ := os.UserHomeDir()
-		wantDocker := filepath.Join(homeDir, ".docker", "config.json")
-		if paths[0] != wantDocker {
-			t.Errorf("paths[0] = %q, want %q", paths[0], wantDocker)
-		}
-
-		// Podman config path should be present (from HOME)
+		homeDir := mustHomeDir(t)
 		wantPodman := filepath.Join(homeDir, ".config", "containers", "auth.json")
-		found := false
-		for _, p := range paths {
-			if p == wantPodman {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected Podman config path %q in paths %v", wantPodman, paths)
-		}
-	})
-
-	t.Run("DOCKER_CONFIG overrides default Docker path", func(t *testing.T) {
-		customDir := t.TempDir()
-		t.Setenv(dockerConfigDirEnv, customDir)
-		t.Setenv(xdgRuntimeDirEnv, "")
-
-		paths := credentialPaths()
-		if len(paths) < 1 {
-			t.Fatal("expected at least one path")
-		}
-
-		wantDocker := filepath.Join(customDir, "config.json")
-		if paths[0] != wantDocker {
-			t.Errorf("paths[0] = %q, want %q", paths[0], wantDocker)
+		if paths[0] != wantPodman {
+			t.Errorf("paths[0] = %q, want %q", paths[0], wantPodman)
 		}
 	})
 
 	t.Run("XDG_RUNTIME_DIR adds Podman runtime path", func(t *testing.T) {
 		runtimeDir := t.TempDir()
-		t.Setenv(dockerConfigDirEnv, "")
 		t.Setenv(xdgRuntimeDirEnv, runtimeDir)
 
-		paths := credentialPaths()
+		paths := podmanPaths()
 		wantPodmanRuntime := filepath.Join(runtimeDir, "containers", "auth.json")
 		found := false
 		for _, p := range paths {
@@ -81,10 +47,9 @@ func TestCredentialPaths(t *testing.T) {
 	})
 
 	t.Run("XDG_RUNTIME_DIR unset omits Podman runtime path", func(t *testing.T) {
-		t.Setenv(dockerConfigDirEnv, "")
 		t.Setenv(xdgRuntimeDirEnv, "")
 
-		paths := credentialPaths()
+		paths := podmanPaths()
 		for _, p := range paths {
 			if filepath.Base(filepath.Dir(p)) == "containers" &&
 				filepath.Base(p) == "auth.json" {
@@ -96,66 +61,56 @@ func TestCredentialPaths(t *testing.T) {
 		}
 	})
 
-	t.Run("all env vars set produces three paths", func(t *testing.T) {
-		dockerDir := t.TempDir()
+	t.Run("all env vars set produces two paths", func(t *testing.T) {
 		runtimeDir := t.TempDir()
-		t.Setenv(dockerConfigDirEnv, dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, runtimeDir)
 
-		paths := credentialPaths()
-		if len(paths) != 3 {
-			t.Fatalf("expected 3 paths, got %d: %v", len(paths), paths)
+		paths := podmanPaths()
+		if len(paths) != 2 {
+			t.Fatalf("expected 2 paths, got %d: %v", len(paths), paths)
 		}
 
-		wantDocker := filepath.Join(dockerDir, "config.json")
 		wantRuntime := filepath.Join(runtimeDir, "containers", "auth.json")
 		homeDir := mustHomeDir(t)
 		wantConfig := filepath.Join(homeDir, ".config", "containers", "auth.json")
 
-		if paths[0] != wantDocker {
-			t.Errorf("paths[0] = %q, want %q", paths[0], wantDocker)
+		if paths[0] != wantRuntime {
+			t.Errorf("paths[0] = %q, want %q", paths[0], wantRuntime)
 		}
-		if paths[1] != wantRuntime {
-			t.Errorf("paths[1] = %q, want %q", paths[1], wantRuntime)
-		}
-		if paths[2] != wantConfig {
-			t.Errorf("paths[2] = %q, want %q", paths[2], wantConfig)
+		if paths[1] != wantConfig {
+			t.Errorf("paths[1] = %q, want %q", paths[1], wantConfig)
 		}
 	})
 
-	t.Run("path order is Docker then Podman runtime then Podman config", func(t *testing.T) {
-		dockerDir := t.TempDir()
+	t.Run("path order is Podman runtime then Podman config", func(t *testing.T) {
 		runtimeDir := t.TempDir()
-		t.Setenv(dockerConfigDirEnv, dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, runtimeDir)
 
-		paths := credentialPaths()
-		if len(paths) != 3 {
-			t.Fatalf("expected 3 paths, got %d: %v", len(paths), paths)
+		paths := podmanPaths()
+		if len(paths) != 2 {
+			t.Fatalf("expected 2 paths, got %d: %v", len(paths), paths)
 		}
 
-		// Docker must be first
-		if filepath.Base(paths[0]) != "config.json" {
-			t.Errorf("first path should be Docker config.json, got %q", paths[0])
+		// Podman runtime first
+		if filepath.Base(paths[0]) != "auth.json" {
+			t.Errorf("first path should be Podman auth.json, got %q", paths[0])
 		}
-		// Podman runtime second
+		// Podman config second
 		if filepath.Base(paths[1]) != "auth.json" {
 			t.Errorf("second path should be Podman auth.json, got %q", paths[1])
-		}
-		// Podman config third
-		if filepath.Base(paths[2]) != "auth.json" {
-			t.Errorf("third path should be Podman auth.json, got %q", paths[2])
 		}
 	})
 }
 
 func TestNewCredentialFunc(t *testing.T) {
-	t.Run("no credential files returns anonymous func", func(t *testing.T) {
+	t.Run("no credential files returns empty credential", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		// Point all paths to non-existent subdirectories within tmpDir.
-		// ORAS NewStore succeeds with empty config for non-existent files,
-		// so this tests anonymous credential return.
-		t.Setenv(dockerConfigDirEnv, filepath.Join(tmpDir, "docker-absent"))
+		// Point Docker config to empty dir and Podman paths to non-existent dirs.
+		dockerDir := filepath.Join(tmpDir, "docker")
+		if err := os.MkdirAll(dockerDir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("DOCKER_CONFIG", dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, filepath.Join(tmpDir, "runtime-absent"))
 
 		credFunc, err := NewCredentialFunc()
@@ -182,7 +137,7 @@ func TestNewCredentialFunc(t *testing.T) {
 			t.Fatal(err)
 		}
 		writeAuthFile(t, filepath.Join(dockerDir, "config.json"), "ghcr.io", "dockeruser", "dockerpass")
-		t.Setenv(dockerConfigDirEnv, dockerDir)
+		t.Setenv("DOCKER_CONFIG", dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, "")
 
 		credFunc, err := NewCredentialFunc()
@@ -219,7 +174,7 @@ func TestNewCredentialFunc(t *testing.T) {
 		}
 		writeAuthFile(t, filepath.Join(containersDir, "auth.json"), "ghcr.io", "podmanuser", "podmanpass")
 
-		t.Setenv(dockerConfigDirEnv, dockerDir)
+		t.Setenv("DOCKER_CONFIG", dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, runtimeDir)
 
 		credFunc, err := NewCredentialFunc()
@@ -256,7 +211,7 @@ func TestNewCredentialFunc(t *testing.T) {
 		}
 		writeAuthFile(t, filepath.Join(containersDir, "auth.json"), "ghcr.io", "podmancfguser", "podmancfgpass")
 
-		t.Setenv(dockerConfigDirEnv, dockerDir)
+		t.Setenv("DOCKER_CONFIG", dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, "")
 		t.Setenv("HOME", homeDir)
 
@@ -294,7 +249,7 @@ func TestNewCredentialFunc(t *testing.T) {
 		}
 		writeAuthFile(t, filepath.Join(containersDir, "auth.json"), "ghcr.io", "podmanuser", "podmanpass")
 
-		t.Setenv(dockerConfigDirEnv, dockerDir)
+		t.Setenv("DOCKER_CONFIG", dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, runtimeDir)
 
 		credFunc, err := NewCredentialFunc()
@@ -320,7 +275,7 @@ func TestNewCredentialFunc(t *testing.T) {
 		writeAuthFile(t, filepath.Join(dockerDir, "config.json"), "ghcr.io", "dockeruser", "dockerpass")
 
 		// XDG_RUNTIME_DIR points to a directory that does NOT have containers/auth.json
-		t.Setenv(dockerConfigDirEnv, dockerDir)
+		t.Setenv("DOCKER_CONFIG", dockerDir)
 		t.Setenv(xdgRuntimeDirEnv, filepath.Join(tmpDir, "no-such-runtime"))
 
 		credFunc, err := NewCredentialFunc()
