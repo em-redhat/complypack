@@ -219,6 +219,9 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 	triageTool := createGetAutomationTriageTool()
 	mcpServer.AddTool(triageTool, handleGetAutomationTriage(store))
 
+	applicabilityTool := createGetApplicabilityGroupsTool()
+	mcpServer.AddTool(applicabilityTool, handleGetApplicabilityGroups(store))
+
 	return &Server{
 		mcp:           mcpServer,
 		ResourceStore: store,

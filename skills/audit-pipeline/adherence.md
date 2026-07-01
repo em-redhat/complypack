@@ -49,11 +49,11 @@ This becomes the **default** executor for all automated plans, set as a global e
 
 #### 4b: Triage requirements by automation eligibility
 
-For each requirement from `get_assessment_requirements`, check its `applicability` array for a group ID indicating automation eligibility. Read `metadata.applicability-groups` from the catalog to understand what groups exist and which one designates automatable requirements.
+Call `get_applicability_groups` to retrieve the catalog's applicability group definitions and see which requirements belong to each group. Use the group titles and descriptions to identify which group designates automation-eligible requirements.
 
-- **Automatable** (applicability includes the automation group): assessment plan inherits the global `mode: Automated` and executor — no per-plan `evaluation-methods` needed unless overriding
+- **Automatable** (requirement belongs to the automation-eligible group): assessment plan inherits the global `mode: Automated` and executor — no per-plan `evaluation-methods` needed unless overriding
 - **Not automatable**: assessment plan overrides with per-plan `evaluation-methods` set to `mode: Manual`, no executor
-- **No automation group in catalog**: ask the user to classify each requirement as automated or manual
+- **No applicability groups in catalog**: ask the user to classify each requirement as automated or manual
 
 The user may also override any individual plan's evaluation method and executor. Present the triage results and ask if any plans need a different evaluator or mode before compiling.
 
@@ -171,8 +171,9 @@ Invoke /comply:pack-assessment to generate assessment logic for the 8 automated 
 
 - `complypack://catalog/*` — Control Catalogs, Guidance Catalogs, Policies
 - `get_assessment_requirements` — get requirement details and parameters for building assessment plans
+- `get_applicability_groups` — get applicability group definitions and requirement memberships for automation triage
 
-**DO NOT parse local YAML files to extract control data.** Use `get_assessment_requirements` to get requirement text, parameters, and applicability. All control data MUST come from MCP resources or tools.
+**DO NOT parse local YAML files to extract control data.** Use `get_assessment_requirements` and `get_applicability_groups` for requirement data and group classification. All control data MUST come from MCP resources or tools.
 
 ## Red Flags
 
@@ -181,7 +182,7 @@ Invoke /comply:pack-assessment to generate assessment logic for the 8 automated 
 - [ ] Every assessment plan has frequency and evaluation method?
 - [ ] Every value came from MCP or the delta report?
 - [ ] Did you use `get_assessment_requirements`, not parse files?
-- [ ] Did you check each requirement's applicability for automation eligibility?
+- [ ] Did you use `get_applicability_groups` to check automation eligibility?
 - [ ] Does `adherence.evaluation-methods` have an executor with the user-identified trusted evaluator?
 - [ ] Did you ask the user to identify the trusted evaluator?
 - [ ] Did you present the triage results and ask if any plans need a different evaluator or mode?

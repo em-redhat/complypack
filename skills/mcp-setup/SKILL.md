@@ -12,7 +12,7 @@ Set up the Gemara MCP server and the complypack MCP server for this project.
 | Server         | Purpose                              | Provides                                                                                                                                                                    |
 | -------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **gemara**     | Authoring and validation             | `gemara://lexicon`, `gemara://schema/definitions`, `validate_gemara_artifact`                                                                                               |
-| **complypack** | Artifact serving, policy validation  | `complypack://catalog/*`, `complypack://mapping/*`, `complypack://schema/*`, `validate_policy`, `test_policy`, `get_assessment_requirements`, `get_automation_triage`, `analyze_parameter_delta`       |
+| **complypack** | Artifact serving, policy validation  | `complypack://catalog/*`, `complypack://mapping/*`, `complypack://schema/*`, `validate_policy`, `test_policy`, `get_assessment_requirements`, `get_applicability_groups`, `get_automation_triage`, `analyze_parameter_delta` |
 
 ## Process
 
@@ -47,7 +47,45 @@ Look up latest release versions. Do NOT use `:latest` tags.
 
 If no release exists, ask the user for a version to pin.
 
-### Step 5: Write Configuration
+### Step 5: Detect Tool Environment
+
+Determine which AI coding tool is running and adapt the output.
+
+First, scan for all recognized tool directories:
+
+- `.claude-plugin/` → Claude Code
+- `.opencode/` → OpenCode
+- `.cursor-plugin/` → Cursor
+
+**If multiple tool directories are found**: prompt the user to select their active tool before proceeding. Example:
+
+> Multiple AI coding tools detected in this repository:
+> 1. Claude Code (`.claude-plugin/`)
+> 2. OpenCode (`.opencode/`)
+>
+> Which tool are you using? (This only affects post-setup guidance —
+> the `.mcp.json` output is identical for all tools.)
+
+**If exactly one is found**: use it automatically.
+
+**If none are found**: fall back to Unknown.
+
+Then apply the selected tool's setup steps:
+
+- **Claude Code**: Write `.mcp.json`.
+- **OpenCode**: Write `.mcp.json`. Verify that `.opencode/skills/` symlinks exist — if not, create them:
+  ```bash
+  mkdir -p .opencode/skills
+  ln -sf ../../skills/audit-pipeline .opencode/skills/audit-pipeline
+  ln -sf ../../skills/pack-assessment .opencode/skills/pack-assessment
+  ln -sf ../../skills/mcp-setup .opencode/skills/mcp-setup
+  ```
+- **Cursor**: Write `.mcp.json`.
+- **Unknown**: Write `.mcp.json` and inform the user about skill discovery.
+
+### Step 6: Write Configuration
+
+Write `.mcp.json`:
 
 ```json
 {
@@ -70,8 +108,10 @@ If no release exists, ask the user for a version to pin.
 }
 ```
 
-### Step 6: Verify
+### Step 7: Verify
 
 Check that each server starts and responds. Report loaded catalogs and schemas.
 
-> "MCP servers configured. Use `/comply:audit-pipeline` to start the compliance pipeline or `/comply:pack-assessment` to generate assessment logic."
+**Claude Code**: Inform user to use `/comply:audit-pipeline` or `/comply:pack-assessment`.
+
+**OpenCode**: Inform user to use `/comply-audit-pipeline` or `/comply-pack-assessment` (custom commands) or to ask "run the comply pipeline" (skill-based invocation).
