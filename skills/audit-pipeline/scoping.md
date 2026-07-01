@@ -1,5 +1,5 @@
 ---
-name: comply-scoping
+name: scoping
 description: Characterize a system's component stack, scope existing Control Catalogs, and identify coverage gaps
 user-invocable: false
 ---

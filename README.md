@@ -102,11 +102,21 @@ complypack mcp serve --config /path/to/complypack.yaml
 
 #### MCP Tools
 
-| Tool                           | Description                                          |
-|--------------------------------|------------------------------------------------------|
-| `validate_policy`              | Validate policy syntax, contract compliance, and linting |
-| `test_policy`                  | Run policy against test data with schema validation  |
-| `get_assessment_requirements`  | Extract assessment requirements with parameters      |
+| Tool                           | Description                                               |
+|--------------------------------|-----------------------------------------------------------|
+| `validate_policy`              | Validate policy syntax, contract compliance, and linting  |
+| `test_policy`                  | Run policy against test data with schema validation       |
+| `get_assessment_requirements`  | Extract assessment requirements with parameters           |
+| `get_applicability_groups`     | Get group definitions and requirement memberships         |
+| `get_automation_triage`        | Classify assessment plans as Automated or Manual          |
+| `analyze_parameter_delta`      | Compare L3 parameter values against L1/L2 requirements    |
+
+#### Tested AI Coding Tools
+
+The MCP server and skills have been tested with:
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+- [OpenCode](https://opencode.ai)
 
 ## Architecture
 

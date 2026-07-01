@@ -216,6 +216,12 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 	deltaTool := createAnalyzeParameterDeltaTool()
 	mcpServer.AddTool(deltaTool, handleAnalyzeParameterDelta(store, loaded))
 
+	triageTool := createGetAutomationTriageTool()
+	mcpServer.AddTool(triageTool, handleGetAutomationTriage(store))
+
+	applicabilityTool := createGetApplicabilityGroupsTool()
+	mcpServer.AddTool(applicabilityTool, handleGetApplicabilityGroups(store))
+
 	return &Server{
 		mcp:           mcpServer,
 		ResourceStore: store,

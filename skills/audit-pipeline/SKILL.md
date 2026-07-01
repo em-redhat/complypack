@@ -1,9 +1,9 @@
 ---
-name: pipeline
+name: audit-pipeline
 description: Use when user wants to build Gemara Policy artifacts for audit preparation or compliance program setup
 ---
 
-# /comply:pipeline — ComplyTime Audit Pipeline
+# /comply:audit-pipeline — ComplyTime Audit Pipeline
 
 Guide users through building a Gemara Policy (applicability statement) from their system architecture and governance sources. The Gemara Policy is the formal contract between audit and engineering, functionally equivalent to an ISO 27001 Statement of Applicability or a NIST System Security Plan.
 
@@ -19,7 +19,7 @@ Guide users through building a Gemara Policy (applicability statement) from thei
 | mapping   | `.complytime/delta-report.yaml`   | Parameter delta analysis + harmonization across framework layers |
 | adherence | `.complytime/child-policy.yaml`   | Compile the child Policy with adherence plan                     |
 
-After adherence, invoke `/comply:pack` to generate assessment logic for use with `complyctl`.
+After adherence, invoke `/comply:pack-assessment` to generate assessment logic for use with `complyctl`.
 
 ## Router Logic
 
@@ -28,7 +28,7 @@ After adherence, invoke `/comply:pack` to generate assessment logic for use with
    - No `.complytime/` directory → start at **scoping**
    - `scoping.yaml` exists but no `delta-report.yaml` → offer **mapping**
    - `delta-report.yaml` exists but no `child-policy.yaml` → offer **adherence**
-   - `child-policy.yaml` exists → pipeline complete, offer to re-run any stage or proceed to `/comply:pack`
+   - `child-policy.yaml` exists → pipeline complete, offer to re-run any stage or proceed to `/comply:pack-assessment`
 3. If the user specified a stage, validate prerequisites:
    - **mapping** requires `scoping.yaml`
    - **adherence** requires `delta-report.yaml`
@@ -45,7 +45,7 @@ Read the stage instructions from this skill's base directory before proceeding:
 ## Status Display
 
 ```text
-/comply:pipeline status:
+/comply:audit-pipeline status:
   [done] scoping     — .complytime/scoping.yaml
   [done] mapping     — .complytime/delta-report.yaml
   [next] adherence   — not yet run

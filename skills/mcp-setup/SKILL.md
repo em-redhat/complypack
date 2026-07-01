@@ -1,18 +1,18 @@
 ---
-name: setup
+name: mcp-setup
 description: Configure the Gemara and complypack MCP servers for this project — set up artifact sources, platform schemas, and generate the .mcp.json config
 ---
 
-# /comply:setup — Configure MCP Servers
+# /comply:mcp-setup — Configure MCP Servers
 
 Set up the Gemara MCP server and the complypack MCP server for this project.
 
 ## MCP Servers
 
-| Server         | Purpose                              | Provides                                                                                                                                                                    |
-| -------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **gemara**     | Authoring and validation             | `gemara://lexicon`, `gemara://schema/definitions`, `validate_gemara_artifact`                                                                                               |
-| **complypack** | Artifact serving, policy validation  | `complypack://catalog/*`, `complypack://mapping/*`, `complypack://schema/*`, `validate_policy`, `test_policy`, `get_assessment_requirements`, `analyze_parameter_delta`       |
+| Server         | Purpose                              | Provides                                                                                                                                                                                                                   |
+| -------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **gemara**     | Authoring and validation             | `gemara://lexicon`, `gemara://schema/definitions`, `validate_gemara_artifact`                                                                                                                                              |
+| **complypack** | Artifact serving, policy validation  | `complypack://catalog/*`, `complypack://mapping/*`, `complypack://schema/*`, `validate_policy`, `test_policy`, `get_assessment_requirements`, `get_applicability_groups`, `get_automation_triage`, `analyze_parameter_delta` |
 
 ## Process
 
@@ -76,9 +76,9 @@ Then apply the selected tool's setup steps:
 - **OpenCode**: Write `.mcp.json`. Verify that `.opencode/skills/` symlinks exist — if not, create them:
   ```bash
   mkdir -p .opencode/skills
-  ln -sf ../../skills/pipeline .opencode/skills/pipeline
-  ln -sf ../../skills/pack .opencode/skills/pack
-  ln -sf ../../skills/setup .opencode/skills/setup
+  ln -sf ../../skills/audit-pipeline .opencode/skills/audit-pipeline
+  ln -sf ../../skills/pack-assessment .opencode/skills/pack-assessment
+  ln -sf ../../skills/mcp-setup .opencode/skills/mcp-setup
   ```
 - **Cursor**: Write `.mcp.json`.
 - **Unknown**: Write `.mcp.json` and inform the user about skill discovery.
@@ -112,6 +112,6 @@ Write `.mcp.json`:
 
 Check that each server starts and responds. Report loaded catalogs and schemas.
 
-**Claude Code**: Inform user to use `/comply:pipeline` or `/comply:pack`.
+**Claude Code**: Inform user to use `/comply:audit-pipeline` or `/comply:pack-assessment`.
 
-**OpenCode**: Inform user to use `/comply-pipeline` or `/comply-pack` (custom commands) or to ask "run the comply pipeline" (skill-based invocation).
+**OpenCode**: Inform user to use `/comply-audit-pipeline` or `/comply-pack-assessment` (custom commands) or to ask "run the comply pipeline" (skill-based invocation).
