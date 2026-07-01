@@ -157,7 +157,7 @@ Write `.complytime/child-policy.yaml`. If the Gemara MCP server is available, va
 
 Show mapping references, imported catalogs/guidance, and the automation split:
 
-```
+```text
 Policy written to .complytime/child-policy.yaml
 
 Assessment plans: 12 total

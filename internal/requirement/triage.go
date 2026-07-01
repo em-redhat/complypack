@@ -6,11 +6,11 @@ import "github.com/gemaraproj/go-gemara"
 
 // TriageResult classifies a policy's assessment plans by automation mode.
 type TriageResult struct {
-	PolicyID                string               `json:"policy"`
+	PolicyID                string                 `json:"policy"`
 	GlobalEvaluationMethods []EvaluationMethodInfo `json:"global_evaluation_methods"`
-	Automated               []TriagedPlan         `json:"automated"`
-	Manual                  []TriagedPlan         `json:"manual"`
-	Counts                  TriageCounts          `json:"counts"`
+	Automated               []TriagedPlan          `json:"automated"`
+	Manual                  []TriagedPlan          `json:"manual"`
+	Counts                  TriageCounts           `json:"counts"`
 }
 
 // EvaluationMethodInfo is a serializable summary of an AcceptedMethod.
