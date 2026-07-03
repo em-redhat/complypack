@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@4a2405e6aebff6aabd8e43618539aa35cf90ac92 # v5.2.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: ${{ matrix.go-version }}
 
@@ -51,7 +51,7 @@ jobs:
 
   call_reusable_ci:
     name: Standardized CI
-    uses: complytime/org-infra/.github/workflows/reusable_ci.yml@37b9e82025fb9d0b4079cfe0bbd7f0434f79e692 # main
+    uses: complytime/org-infra/.github/workflows/reusable_ci.yml@638b2037394ca0f0b860a135c7c27dce75fd3c03 # v0.5.0
     permissions:
       contents: read
       issues: read
@@ -59,7 +59,7 @@ jobs:
 
   call_reusable_security:
     name: Security Scan
-    uses: complytime/org-infra/.github/workflows/reusable_security.yml@638b2037394ca0f0b860a135c7c27dce75fd3c03 # main
+    uses: complytime/org-infra/.github/workflows/reusable_security.yml@638b2037394ca0f0b860a135c7c27dce75fd3c03 # v0.5.0
     permissions:
       contents: read
       id-token: write
@@ -68,7 +68,7 @@ jobs:
 
   call_reusable_vuln_scan:
     name: Vulnerability Scan
-    uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@638b2037394ca0f0b860a135c7c27dce75fd3c03 # main
+    uses: complytime/org-infra/.github/workflows/reusable_vuln_scan.yml@638b2037394ca0f0b860a135c7c27dce75fd3c03 # v0.5.0
     permissions:
       contents: read
       actions: read
