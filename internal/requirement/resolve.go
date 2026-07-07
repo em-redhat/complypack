@@ -4,6 +4,8 @@ package requirement
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/gemaraproj/go-gemara"
 )
@@ -73,7 +75,7 @@ func ResolvePolicy(policy gemara.Policy, set *ArtifactSet) (*ResolvedPolicy, err
 	resolvedNothing := len(resolvedCatalogs) == 0 && len(resolvedGuidance) == 0
 
 	if (hasCatalogImports || hasGuidanceImports) && resolvedNothing {
-		return nil, fmt.Errorf("no imports could be resolved for policy %s", policy.Metadata.Id)
+		return nil, unresolvedImportsError(policy, unresolved, set)
 	}
 
 	return newResolvedPolicy(policy, resolvedCatalogs, resolvedGuidance, unresolved), nil
@@ -97,7 +99,8 @@ func checkDuplicateImportRefs(imports gemara.Imports) error {
 }
 
 // buildRefIndex builds a lookup from mapping-reference ID to artifact
-// metadata ID. Currently an identity mapping.
+// metadata ID. Each mapping-reference id must match the referenced
+// artifact's metadata.id exactly.
 func buildRefIndex(refs []gemara.MappingReference) (map[string]string, error) {
 	idx := make(map[string]string, len(refs))
 	for _, ref := range refs {
@@ -110,6 +113,59 @@ func buildRefIndex(refs []gemara.MappingReference) (map[string]string, error) {
 		idx[ref.Id] = ref.Id
 	}
 	return idx, nil
+}
+
+// unresolvedImportsError builds a descriptive error message listing
+// the mapping-reference IDs that failed to match and the available
+// artifact metadata IDs so the user can see the mismatch.
+func unresolvedImportsError(policy gemara.Policy, unresolved []string, set *ArtifactSet) error {
+	available := availableArtifactIDs(set)
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "no imports could be resolved for policy %s", policy.Metadata.Id)
+
+	if len(unresolved) > 0 {
+		fmt.Fprintf(&b, ": mapping-reference IDs %s did not match any loaded source",
+			formatIDList(unresolved))
+	}
+
+	if len(available) > 0 {
+		fmt.Fprintf(&b, " (available sources: %s)", strings.Join(available, ", "))
+	} else {
+		fmt.Fprintf(&b, " (no sources loaded)")
+	}
+
+	fmt.Fprintf(&b, "; each mapping-reference id must match the referenced artifact's metadata.id exactly")
+
+	return fmt.Errorf("%s", b.String())
+}
+
+// availableArtifactIDs returns a sorted, deduplicated list of all
+// metadata IDs in the artifact set (catalogs and guidance).
+func availableArtifactIDs(set *ArtifactSet) []string {
+	seen := make(map[string]bool, len(set.Catalogs)+len(set.Guidance))
+	for id := range set.Catalogs {
+		seen[id] = true
+	}
+	for id := range set.Guidance {
+		seen[id] = true
+	}
+
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// formatIDList formats a list of IDs as a quoted, comma-separated string.
+func formatIDList(ids []string) string {
+	quoted := make([]string, len(ids))
+	for i, id := range ids {
+		quoted[i] = fmt.Sprintf("%q", id)
+	}
+	return strings.Join(quoted, ", ")
 }
 
 func catalogPoolIndex(catalogs map[string]*gemara.ControlCatalog) map[string]gemara.ControlCatalog {

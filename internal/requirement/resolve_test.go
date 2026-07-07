@@ -88,7 +88,7 @@ func TestResolvePolicy(t *testing.T) {
 		assert.Len(t, rp.ControlCatalogs, 1)
 	})
 
-	t.Run("errors on all imports unresolved", func(t *testing.T) {
+	t.Run("errors on all imports unresolved with diagnostic info", func(t *testing.T) {
 		set := testArtifactSet()
 		delete(set.Catalogs, "test-catalog")
 		policy := set.Policies["test-policy"]
@@ -96,6 +96,9 @@ func TestResolvePolicy(t *testing.T) {
 		_, err := ResolvePolicy(*policy, set)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no imports could be resolved")
+		assert.Contains(t, err.Error(), `"test-catalog"`)
+		assert.Contains(t, err.Error(), "did not match any loaded source")
+		assert.Contains(t, err.Error(), "mapping-reference id must match")
 	})
 
 	t.Run("errors on duplicate import refs", func(t *testing.T) {
@@ -118,6 +121,112 @@ func TestResolvePolicy(t *testing.T) {
 		_, err := ResolvePolicy(*policy, set)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate mapping-reference")
+	})
+}
+
+func TestResolvePolicy_ErrorMessages(t *testing.T) {
+	t.Run("lists available sources when alias doesn't match", func(t *testing.T) {
+		catalog := &gemara.ControlCatalog{
+			Metadata: gemara.Metadata{Id: "container-security-controls"},
+			Controls: []gemara.Control{
+				{Id: "CSC-001", Title: "Registry Security"},
+			},
+		}
+
+		policy := &gemara.Policy{
+			Metadata: gemara.Metadata{
+				Id: "my-policy",
+				MappingReferences: []gemara.MappingReference{
+					{Id: "csc", Title: "Container Security Controls", Version: "0.1.0"},
+				},
+			},
+			Imports: gemara.Imports{
+				Catalogs: []gemara.CatalogImport{
+					{ReferenceId: "csc"},
+				},
+			},
+		}
+
+		set := &ArtifactSet{
+			Catalogs: map[string]*gemara.ControlCatalog{
+				"container-security-controls": catalog,
+			},
+			Policies: map[string]*gemara.Policy{"my-policy": policy},
+			Guidance: make(map[string]*gemara.GuidanceCatalog),
+		}
+
+		_, err := ResolvePolicy(*policy, set)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no imports could be resolved for policy my-policy")
+		assert.Contains(t, err.Error(), `"csc"`)
+		assert.Contains(t, err.Error(), "container-security-controls")
+		assert.Contains(t, err.Error(), "mapping-reference id must match")
+	})
+
+	t.Run("lists multiple available sources", func(t *testing.T) {
+		policy := &gemara.Policy{
+			Metadata: gemara.Metadata{
+				Id: "my-policy",
+				MappingReferences: []gemara.MappingReference{
+					{Id: "alias-a"},
+					{Id: "alias-b"},
+				},
+			},
+			Imports: gemara.Imports{
+				Catalogs: []gemara.CatalogImport{
+					{ReferenceId: "alias-a"},
+				},
+				Guidance: []gemara.GuidanceImport{
+					{ReferenceId: "alias-b"},
+				},
+			},
+		}
+
+		set := &ArtifactSet{
+			Catalogs: map[string]*gemara.ControlCatalog{
+				"real-catalog-id": {
+					Metadata: gemara.Metadata{Id: "real-catalog-id"},
+					Controls: []gemara.Control{{Id: "C-1"}},
+				},
+			},
+			Policies: map[string]*gemara.Policy{"my-policy": policy},
+			Guidance: map[string]*gemara.GuidanceCatalog{
+				"real-guidance-id": {
+					Metadata: gemara.Metadata{Id: "real-guidance-id"},
+				},
+			},
+		}
+
+		_, err := ResolvePolicy(*policy, set)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "real-catalog-id")
+		assert.Contains(t, err.Error(), "real-guidance-id")
+	})
+
+	t.Run("reports no sources loaded when set is empty", func(t *testing.T) {
+		policy := &gemara.Policy{
+			Metadata: gemara.Metadata{
+				Id: "my-policy",
+				MappingReferences: []gemara.MappingReference{
+					{Id: "missing"},
+				},
+			},
+			Imports: gemara.Imports{
+				Catalogs: []gemara.CatalogImport{
+					{ReferenceId: "missing"},
+				},
+			},
+		}
+
+		set := &ArtifactSet{
+			Catalogs: make(map[string]*gemara.ControlCatalog),
+			Policies: map[string]*gemara.Policy{"my-policy": policy},
+			Guidance: make(map[string]*gemara.GuidanceCatalog),
+		}
+
+		_, err := ResolvePolicy(*policy, set)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no sources loaded")
 	})
 }
 
