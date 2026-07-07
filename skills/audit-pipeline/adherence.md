@@ -30,6 +30,13 @@ From the delta report's `sources`, build `mapping_references`:
 - One for each scoped Control Catalog
 - One for each Guidance Catalog for the target framework
 
+> **Critical:** Set `mapping-reference.id` to match the referenced
+> artifact's `metadata.id` exactly (e.g., `container-security-controls`,
+> not `csc`). ComplyPack resolves policy imports by matching these IDs
+> against loaded sources. Short aliases pass Gemara schema validation but
+> fail at complypack runtime with:
+> `failed to resolve effective policy: no imports could be resolved`
+
 ### Step 3: Build Imports
 
 - `imports.catalogs` — one per Control Catalog

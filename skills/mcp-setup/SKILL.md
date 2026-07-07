@@ -18,7 +18,11 @@ Set up the Gemara MCP server and the complypack MCP server for this project.
 
 ### Step 1: Check Existing Configuration
 
-Check if `.mcp.json` already exists. Show current config and ask if the user wants to reconfigure.
+Check if a config file already exists. The file depends on the tool environment:
+- Claude Code / Cursor: `.mcp.json`
+- OpenCode: `opencode.json` (or `opencode.jsonc`)
+
+Show current config and ask if the user wants to reconfigure.
 
 ### Step 2: Configure Sources
 
@@ -29,6 +33,12 @@ Ask for Gemara artifact sources for the complypack server:
 - `file://path/to/catalog.yaml`
 
 At least one source is required.
+
+> **Volume mounts for `file://` sources:** When any source uses `file://`,
+> the Docker/Podman command must include `-v <host-path>:/workspace -w /workspace`
+> to mount the host directory into the container. Without this, the server
+> cannot access the file and will fail at startup. Relative `file://` paths
+> resolve from the container's working directory (`/workspace`).
 
 ### Step 3: Configure Schemas
 
@@ -81,8 +91,8 @@ First, scan for all recognized tool directories:
 > 1. Claude Code (`.claude-plugin/`)
 > 2. OpenCode (`.opencode/`)
 >
-> Which tool are you using? (This only affects post-setup guidance —
-> the `.mcp.json` output is identical for all tools.)
+> Which tool are you using? (This affects the config file format and
+> post-setup guidance.)
 
 **If exactly one is found**: use it automatically.
 
@@ -90,20 +100,20 @@ First, scan for all recognized tool directories:
 
 Then apply the selected tool's setup steps:
 
-- **Claude Code**: Write `.mcp.json`.
-- **OpenCode**: Write `.mcp.json`. Verify that `.opencode/skills/` symlinks exist — if not, create them:
+- **Claude Code**: Write `.mcp.json` (see Step 6, `.mcp.json` format).
+- **OpenCode**: Write `opencode.json` (see Step 6, `opencode.json` format). Verify that `.opencode/skills/` symlinks exist — if not, create them:
   ```bash
   mkdir -p .opencode/skills
   ln -sf ../../skills/audit-pipeline .opencode/skills/audit-pipeline
   ln -sf ../../skills/pack-assessment .opencode/skills/pack-assessment
   ln -sf ../../skills/mcp-setup .opencode/skills/mcp-setup
   ```
-- **Cursor**: Write `.mcp.json`.
+- **Cursor**: Write `.mcp.json` (see Step 6, `.mcp.json` format).
 - **Unknown**: Write `.mcp.json` and inform the user about skill discovery.
 
 ### Step 6: Write Configuration
 
-Write `.mcp.json`:
+#### Claude Code / Cursor — `.mcp.json`
 
 ```json
 {
@@ -125,6 +135,37 @@ Write `.mcp.json`:
   }
 }
 ```
+
+#### OpenCode — `opencode.json`
+
+If `opencode.json` already exists, merge the `mcp` entries into it.
+If not, create a new file.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "gemara": {
+      "type": "local",
+      "command": ["podman", "run", "--rm", "-i",
+                  "ghcr.io/gemaraproj/gemara-mcp:<VERSION>",
+                  "serve"]
+    },
+    "complypack": {
+      "type": "local",
+      "command": ["podman", "run", "--rm", "-i",
+                  "ghcr.io/complytime/complypack:<VERSION>",
+                  "mcp", "serve",
+                  "--source", "<SOURCE>",
+                  "--schema", "<SCHEMA>"]
+    }
+  }
+}
+```
+
+> **Key differences:** OpenCode uses `opencode.json` with top-level key
+> `mcp` (not `mcpServers`). Each server has `"type": "local"` and
+> `command` is a single array (not split into `command` + `args`).
 
 ### Step 7: Verify
 

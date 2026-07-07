@@ -61,6 +61,41 @@ Use `oci+http://` for registries without TLS:
 "--source", "oci+http://localhost:5001/gemara/controls:v1"
 ```
 
+### Local file sources (development)
+
+When using `file://` sources during local development (before your catalog
+is published as an OCI bundle), you must mount the host directory into the
+container. Without the volume mount, the server will fail because the file
+path does not exist inside the container.
+
+For Claude Code / Cursor (`.mcp.json`):
+
+```json
+"args": ["run", "--rm", "-i",
+         "-v", "/path/to/artifacts:/workspace",
+         "-w", "/workspace",
+         "ghcr.io/complytime/complypack:main",
+         "mcp", "serve",
+         "--source", "file://catalog.yaml",
+         "--schema", "ci-github-actions"]
+```
+
+For OpenCode (`opencode.json`):
+
+```json
+"command": ["podman", "run", "--rm", "-i",
+            "-v", "/path/to/artifacts:/workspace",
+            "-w", "/workspace",
+            "ghcr.io/complytime/complypack:main",
+            "mcp", "serve",
+            "--source", "file://catalog.yaml",
+            "--schema", "ci-github-actions"]
+```
+
+The `-v` flag mounts the host directory containing your artifacts, and
+`-w /workspace` sets the container's working directory so `file://`
+relative paths resolve correctly.
+
 ## Cursor
 
 Add the MCP server to your Cursor settings. Open **Settings > MCP** and add
@@ -114,22 +149,29 @@ The following slash commands are available in a Gemini session:
 Skills and custom commands are auto-discovered from `.opencode/skills/`
 and `.opencode/commands/` (committed as symlinks). No manual setup needed.
 
-To configure the MCP server, create a `.mcp.json` in your project:
+To configure the MCP server, add a `complypack` entry to `opencode.json`
+(or `opencode.jsonc`) in your project root:
 
 ```json
 {
-  "mcpServers": {
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
     "complypack": {
-      "command": "podman",
-      "args": ["run", "--rm", "-i",
-               "ghcr.io/complytime/complypack:main",
-               "mcp", "serve",
-               "--source", "oci://your-registry/gemara/your-catalog:v1",
-               "--schema", "ci-github-actions"]
+      "type": "local",
+      "command": ["podman", "run", "--rm", "-i",
+                  "ghcr.io/complytime/complypack:main",
+                  "mcp", "serve",
+                  "--source", "oci://your-registry/gemara/your-catalog:v1",
+                  "--schema", "ci-github-actions"]
     }
   }
 }
 ```
+
+> **Note:** OpenCode uses `opencode.json`, not `.mcp.json`. The format
+> differs: the top-level key is `mcp` (not `mcpServers`), each server
+> includes `"type": "local"`, and `command` is a single array (not split
+> into `command` + `args`).
 
 Or use the setup command to generate it interactively:
 
