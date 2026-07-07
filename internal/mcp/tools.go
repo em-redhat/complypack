@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -21,7 +22,7 @@ func validateTestDataAgainstSchema(testData map[string]interface{}, platform str
 		return []string{fmt.Sprintf("unsupported platform %q: %v", platform, err)}
 	}
 
-	cueCtx := schema.Context()
+	cueCtx := cuecontext.New()
 	dataVal := cueCtx.Encode(testData)
 	if dataVal.Err() != nil {
 		return []string{fmt.Sprintf("failed to encode test data: %v", dataVal.Err())}
