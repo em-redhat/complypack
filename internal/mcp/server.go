@@ -6,22 +6,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
-	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/complytime/complypack/internal/cache"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/evaluator"
-	"github.com/complytime/complypack/internal/registry"
 	"github.com/complytime/complypack/internal/requirement"
 	"github.com/complytime/complypack/internal/schema"
+	"github.com/complytime/complypack/internal/source"
 	"github.com/complytime/complypack/schemas"
-	"github.com/gemaraproj/go-gemara/bundle"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"oras.land/oras-go/v2"
-	"oras.land/oras-go/v2/content/memory"
 )
 
 // Server wraps the MCP SDK server with ComplyPack-specific state.
@@ -83,7 +76,7 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 	// Load Gemara artifacts from all configured sources
 	loaded := requirement.NewArtifactSet()
 	for _, entry := range cfg.Gemara.Sources {
-		src, err := LoadArtifacts(ctx, entry.Source, entry.PlainHTTP, opts.CacheDir)
+		src, err := source.LoadArtifacts(ctx, entry.Source, entry.PlainHTTP, opts.CacheDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load artifacts from %s: %w", entry.Source, err)
 		}
@@ -277,88 +270,4 @@ func loadSchemas(ctx context.Context, schemaRefs []config.SchemaRef, reg *schema
 	}
 
 	return schemaMap, cueSchemaMap, nil
-}
-
-// LoadArtifacts loads and classifies Gemara artifacts from either a file path or OCI reference.
-// When cacheDir is non-empty, OCI artifacts are cached on disk for subsequent invocations.
-func LoadArtifacts(ctx context.Context, source string, plainHTTP bool, cacheDir string) (*requirement.ArtifactSet, error) {
-	if strings.HasPrefix(source, "file://") {
-		path := strings.TrimPrefix(source, "file://")
-		return loadFileArtifacts(ctx, path)
-	}
-
-	if strings.HasPrefix(source, "oci://") {
-		ref := strings.TrimPrefix(source, "oci://")
-		return loadBundleArtifacts(ctx, ref, plainHTTP, cacheDir)
-	}
-
-	if isOCIReference(source) {
-		return loadBundleArtifacts(ctx, source, plainHTTP, cacheDir)
-	}
-
-	return loadFileArtifacts(ctx, source)
-}
-
-func loadFileArtifacts(ctx context.Context, path string) (*requirement.ArtifactSet, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	result, err := requirement.Classify(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to classify artifact: %w", err)
-	}
-
-	return result, nil
-}
-
-func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool, cacheDir string) (*requirement.ArtifactSet, error) {
-	credFunc, err := registry.NewCredentialFunc()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load registry credentials: %w", err)
-	}
-
-	repo, err := registry.NewRepository(ref, credFunc, plainHTTP)
-	if err != nil {
-		return nil, err
-	}
-
-	tag := registry.ParseTag(ref)
-
-	// Use on-disk OCI store when cacheDir is set, otherwise fall back to in-memory.
-	var store oras.Target
-	if cacheDir != "" {
-		ociStore, err := cache.NewOCIStore(cacheDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open cache store: %w", err)
-		}
-		store = ociStore
-	} else {
-		store = memory.New()
-	}
-
-	_, err = oras.Copy(ctx, repo, tag, store, tag, oras.DefaultCopyOptions)
-	if err != nil {
-		return nil, fmt.Errorf("failed to pull from registry: %w", err)
-	}
-
-	b, err := bundle.Unpack(ctx, store, tag)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unpack bundle: %w", err)
-	}
-
-	result, err := requirement.ClassifyBundle(b)
-	if err != nil {
-		return nil, fmt.Errorf("failed to classify bundle: %w", err)
-	}
-
-	return result, nil
-}
-
-// isOCIReference returns true if the source looks like an OCI reference.
-func isOCIReference(source string) bool {
-	// OCI references contain a registry host (domain with optional port)
-	// Examples: ghcr.io/org/repo:tag, localhost:5000/repo:tag, http://registry/repo
-	return strings.Contains(source, "/") && (strings.Contains(source, ":") || strings.Contains(source, "//"))
 }

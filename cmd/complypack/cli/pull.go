@@ -9,7 +9,7 @@ import (
 
 	"github.com/complytime/complypack/internal/cache"
 	"github.com/complytime/complypack/internal/config"
-	"github.com/complytime/complypack/internal/mcp"
+	"github.com/complytime/complypack/internal/source"
 	"github.com/spf13/cobra"
 )
 
@@ -62,23 +62,23 @@ Examples:
 			var errors []string
 
 			for _, entry := range cfg.Gemara.Sources {
-				source := entry.Source
+				src := entry.Source
 
 				// Skip file sources — they are already local
-				if strings.HasPrefix(source, "file://") || !isOCISource(source) {
-					log.Printf("  Skipping %s (local source)", source)
+				if strings.HasPrefix(src, "file://") || !isOCISource(src) {
+					log.Printf("  Skipping %s (local source)", src)
 					skipped++
 					continue
 				}
 
-				log.Printf("  Pulling %s...", source)
-				_, err := mcp.LoadArtifacts(ctx, source, entry.PlainHTTP, resolvedCacheDir)
+				log.Printf("  Pulling %s...", src)
+				_, err := source.LoadArtifacts(ctx, src, entry.PlainHTTP, resolvedCacheDir)
 				if err != nil {
-					log.Printf("  ERROR: %s: %v", source, err)
-					errors = append(errors, fmt.Sprintf("%s: %v", source, err))
+					log.Printf("  ERROR: %s: %v", src, err)
+					errors = append(errors, fmt.Sprintf("%s: %v", src, err))
 					continue
 				}
-				log.Printf("  Pulled %s", source)
+				log.Printf("  Pulled %s", src)
 				pulled++
 			}
 
