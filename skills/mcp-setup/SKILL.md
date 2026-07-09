@@ -16,7 +16,69 @@ Set up the Gemara MCP server and the complypack MCP server for this project.
 
 ## Process
 
-### Step 1: Check Existing Configuration
+### Step 1: Detect Tool Environment
+
+Determine which AI coding tool is running and adapt the output.
+
+#### 1a: Implicit context (preferred)
+
+The most reliable signal is the tool that is currently executing this skill.
+Users may have multiple AI tools installed, so binary/PATH detection is not
+sufficient — it only proves installation, not active use.
+
+- **OpenCode** — If this skill was loaded via OpenCode's `skill` tool or
+  a `/comply-setup` custom command, the tool is OpenCode. The agent
+  should recognize that it *is* OpenCode and select itself without
+  scanning.
+- **Claude Code** — If the skill was loaded via Claude Code's slash
+  command system (e.g., `/comply:mcp-setup`), the tool is Claude Code.
+- **Cursor** — If the skill was loaded via Cursor's command system, the
+  tool is Cursor.
+
+Since the agent inherently knows which tool it is running inside, this
+detection requires no environment checks. Use it directly and skip all
+further detection steps.
+
+#### 1b: Directory scanning (fallback)
+
+If the agent cannot determine its own runtime identity (e.g., the skill
+instructions were copy-pasted into a generic chat), scan for recognized
+tool directories:
+
+- `.claude-plugin/` → Claude Code
+- `.opencode/` → OpenCode
+- `.cursor-plugin/` → Cursor
+
+**If multiple tool directories are found**: prompt the user to select their
+active tool before proceeding. Example:
+
+> Multiple AI coding tools detected in this repository:
+> 1. Claude Code (`.claude-plugin/`)
+> 2. OpenCode (`.opencode/`)
+>
+> Which tool are you using? (This affects the config file format and
+> post-setup guidance.)
+
+**If exactly one is found**: use it automatically.
+
+#### 1c: Interactive prompt (last resort)
+
+**If the agent cannot determine its runtime identity and no tool
+directories are found**, prompt the user — never silently default:
+
+> No AI coding tool detected automatically.
+> Which AI coding tool are you using?
+>
+> 1. Claude Code
+> 2. OpenCode
+> 3. Cursor
+
+#### Fallback rule
+
+If any step above fails or produces an ambiguous result, always fall back
+to prompting the user with the supported tool list. Never guess silently.
+
+### Step 2: Check Existing Configuration
 
 Check if a config file already exists. The file depends on the tool environment:
 - Claude Code / Cursor: `.mcp.json`
@@ -24,7 +86,7 @@ Check if a config file already exists. The file depends on the tool environment:
 
 Show current config and ask if the user wants to reconfigure.
 
-### Step 2: Detect Container Runtime
+### Step 3: Detect Container Runtime
 
 Detect which container runtime is available on the host before generating
 any configuration.
@@ -44,7 +106,7 @@ command -v podman &> /dev/null && HAVE_PODMAN=true || HAVE_PODMAN=false
 Use `<RUNTIME>` in all subsequent steps wherever the container command
 appears.
 
-### Step 3: Configure Sources
+### Step 4: Configure Sources
 
 Ask for Gemara artifact sources for the complypack server:
 
@@ -60,7 +122,7 @@ At least one source is required.
 > cannot access the file and will fail at startup. Relative `file://` paths
 > resolve from the container's working directory (`/workspace`).
 
-### Step 4: Configure Schemas
+### Step 5: Configure Schemas
 
 Ask which platform schemas to load:
 
@@ -68,7 +130,7 @@ Ask which platform schemas to load:
 - `kubernetes-deployment`, `kubernetes-pod`, etc. (built-in, per resource type)
 - `terraform=https://example.com/terraform.json` (custom, explicit source)
 
-### Step 5: Resolve Versions
+### Step 6: Resolve Versions
 
 Look up latest release versions. Do NOT use `:latest` tags.
 
@@ -95,81 +157,14 @@ container image. Fall back to `:main` and inform the user:
 > "No container image found for tag `<VERSION>`. Using `:main` instead.
 > The `:main` tag tracks the latest commit on the main branch."
 
-### Step 6: Detect Tool Environment
-
-Determine which AI coding tool is running and adapt the output.
-
-#### 5a: Implicit context (preferred)
-
-The most reliable signal is the tool that is currently executing this skill.
-Users may have multiple AI tools installed, so binary/PATH detection is not
-sufficient — it only proves installation, not active use.
-
-- **OpenCode** — If this skill was loaded via OpenCode's `skill` tool or
-  a `/comply-setup` custom command, the tool is OpenCode. The agent
-  should recognize that it *is* OpenCode and select itself without
-  scanning.
-- **Claude Code** — If the skill was loaded via Claude Code's slash
-  command system (e.g., `/comply:mcp-setup`), the tool is Claude Code.
-- **Cursor** — If the skill was loaded via Cursor's command system, the
-  tool is Cursor.
-
-Since the agent inherently knows which tool it is running inside, this
-detection requires no environment checks. Use it directly and skip all
-further detection steps.
-
-#### 5b: Directory scanning (fallback)
-
-If the agent cannot determine its own runtime identity (e.g., the skill
-instructions were copy-pasted into a generic chat), scan for recognized
-tool directories:
-
-- `.claude-plugin/` → Claude Code
-- `.opencode/` → OpenCode
-- `.cursor-plugin/` → Cursor
-
-**If multiple tool directories are found**: prompt the user to select their
-active tool before proceeding. Example:
-
-> Multiple AI coding tools detected in this repository:
-> 1. Claude Code (`.claude-plugin/`)
-> 2. OpenCode (`.opencode/`)
->
-> Which tool are you using? (This affects the config file format and
-> post-setup guidance.)
-
-**If exactly one is found**: use it automatically.
-
-#### 5c: Interactive prompt (last resort)
-
-**If the agent cannot determine its runtime identity and no tool
-directories are found**, prompt the user — never silently default:
-
-> No AI coding tool detected automatically.
-> Which AI coding tool are you using?
->
-> 1. Claude Code
-> 2. OpenCode
-> 3. Cursor
-
-#### Fallback rule
-
-If any step above fails or produces an ambiguous result, always fall back
-to prompting the user with the supported tool list. Never guess silently.
-
-#### Apply the detected tool's setup steps
-
-- **Claude Code**: Write `.mcp.json` (see Step 7, `.mcp.json` format).
-- **OpenCode**: Write `opencode.json` (see Step 7, `opencode.json` format). Verify that `.opencode/skills/` symlinks exist — if not, create them:
-  ```bash
-  mkdir -p .opencode/skills
-  ln -sf ../../skills/audit-pipeline .opencode/skills/audit-pipeline
-  ln -sf ../../skills/build-assessment .opencode/skills/build-assessment
-  ln -sf ../../skills/mcp-setup .opencode/skills/mcp-setup
-  ```
-- **Cursor**: Write `.mcp.json` (see Step 7, `.mcp.json` format).
-
 ### Step 7: Write Configuration
+
+Apply the tool's setup steps:
+
+- **Claude Code**: Write `.mcp.json` (see below, `.mcp.json` format).
+- **OpenCode**: Write `opencode.json` (see below, `opencode.json` format).
+- **Cursor**: Write `.mcp.json` (see below, `.mcp.json` format).
+- **Unknown**: Write `.mcp.json` and inform the user about skill discovery.
 
 #### Claude Code / Cursor — `.mcp.json`
 

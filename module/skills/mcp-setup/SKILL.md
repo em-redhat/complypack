@@ -16,66 +16,7 @@ Set up the Gemara MCP server and the complypack MCP server for this project.
 
 ## Process
 
-### Step 1: Check Existing Configuration
-
-Check if a config file already exists. The file depends on the tool environment:
-- Claude Code / Cursor: `.mcp.json`
-- OpenCode: `opencode.json` (or `opencode.jsonc`)
-
-Show current config and ask if the user wants to reconfigure.
-
-### Step 2: Configure Sources
-
-Ask for Gemara artifact sources for the complypack server:
-
-- `oci://registry.example.com/gemara/controls:v1`
-- `oci+http://localhost:5001/gemara/controls:v1` (development)
-- `file://path/to/catalog.yaml`
-
-At least one source is required.
-
-> **Volume mounts for `file://` sources:** When any source uses `file://`,
-> the Docker/Podman command must include `-v <host-path>:/workspace -w /workspace`
-> to mount the host directory into the container. Without this, the server
-> cannot access the file and will fail at startup. Relative `file://` paths
-> resolve from the container's working directory (`/workspace`).
-
-### Step 3: Configure Schemas
-
-Ask which platform schemas to load:
-
-- `ci-github-actions`, `ci-gitlab`, `ci-azure-pipelines` (built-in)
-- `kubernetes-deployment`, `kubernetes-pod`, etc. (built-in, per resource type)
-- `terraform=https://example.com/terraform.json` (custom, explicit source)
-
-### Step 4: Resolve Versions
-
-Look up latest release versions. Do NOT use `:latest` tags.
-
-- **gemara-mcp**: `gh api repos/gemaraproj/gemara-mcp/releases/latest --jq '.tag_name'`
-- **complypack**: `gh api repos/complytime/complypack/releases --jq '.[0].tag_name'`
-
-The complypack releases may be pre-releases, so use the first entry from the
-full releases list rather than the `releases/latest` endpoint.
-
-If no release exists, fall back to `:main`.
-
-#### Verify container image tag exists
-
-After resolving the version tag, verify the container image actually exists
-at that tag before using it:
-
-```bash
-podman manifest inspect ghcr.io/complytime/complypack:<VERSION> > /dev/null 2>&1
-```
-
-If the manifest check fails, the release tag does not have a corresponding
-container image. Fall back to `:main` and inform the user:
-
-> "No container image found for tag `<VERSION>`. Using `:main` instead.
-> The `:main` tag tracks the latest commit on the main branch."
-
-### Step 5: Detect Tool Environment
+### Step 1: Detect Tool Environment
 
 Determine which AI coding tool is running and adapt the output.
 
@@ -98,20 +39,93 @@ First, scan for all recognized tool directories:
 
 **If none are found**: fall back to Unknown.
 
-Then apply the selected tool's setup steps:
+### Step 2: Check Existing Configuration
 
-- **Claude Code**: Write `.mcp.json` (see Step 6, `.mcp.json` format).
-- **OpenCode**: Write `opencode.json` (see Step 6, `opencode.json` format). Verify that `.opencode/skills/` symlinks exist — if not, create them:
-  ```bash
-  mkdir -p .opencode/skills
-  ln -sf ../../skills/audit-pipeline .opencode/skills/audit-pipeline
-  ln -sf ../../skills/pack-assessment .opencode/skills/pack-assessment
-  ln -sf ../../skills/mcp-setup .opencode/skills/mcp-setup
-  ```
-- **Cursor**: Write `.mcp.json` (see Step 6, `.mcp.json` format).
+Check if a config file already exists. The file depends on the tool environment:
+- Claude Code / Cursor: `.mcp.json`
+- OpenCode: `opencode.json` (or `opencode.jsonc`)
+
+Show current config and ask if the user wants to reconfigure.
+
+### Step 3: Detect Container Runtime
+
+Detect which container runtime is available on the host before generating
+any configuration.
+
+```bash
+command -v docker &> /dev/null && HAVE_DOCKER=true || HAVE_DOCKER=false
+command -v podman &> /dev/null && HAVE_PODMAN=true || HAVE_PODMAN=false
+```
+
+- If **only one** is found: use it automatically and set `RUNTIME` to
+  `docker` or `podman`.
+- If **both** are found: ask the user which they prefer and set `RUNTIME`
+  to their choice.
+- If **neither** is found: stop and inform the user that a container
+  runtime (`docker` or `podman`) is required. Do not proceed.
+
+Use `<RUNTIME>` in all subsequent steps wherever the container command
+appears.
+
+### Step 4: Configure Sources
+
+Ask for Gemara artifact sources for the complypack server:
+
+- `oci://registry.example.com/gemara/controls:v1`
+- `oci+http://localhost:5001/gemara/controls:v1` (development)
+- `file://path/to/catalog.yaml`
+
+At least one source is required.
+
+> **Volume mounts for `file://` sources:** When any source uses `file://`,
+> the Docker/Podman command must include `-v <host-path>:/workspace -w /workspace`
+> to mount the host directory into the container. Without this, the server
+> cannot access the file and will fail at startup. Relative `file://` paths
+> resolve from the container's working directory (`/workspace`).
+
+### Step 5: Configure Schemas
+
+Ask which platform schemas to load:
+
+- `ci-github-actions`, `ci-gitlab`, `ci-azure-pipelines` (built-in)
+- `kubernetes-deployment`, `kubernetes-pod`, etc. (built-in, per resource type)
+- `terraform=https://example.com/terraform.json` (custom, explicit source)
+
+### Step 6: Resolve Versions
+
+Look up latest release versions. Do NOT use `:latest` tags.
+
+- **gemara-mcp**: `gh api repos/gemaraproj/gemara-mcp/releases/latest --jq '.tag_name'`
+- **complypack**: `gh api repos/complytime/complypack/releases --jq '.[0].tag_name'`
+
+The complypack releases may be pre-releases, so use the first entry from the
+full releases list rather than the `releases/latest` endpoint.
+
+If no release exists, fall back to `:main`.
+
+#### Verify container image tag exists
+
+After resolving the version tag, verify the container image actually exists
+at that tag before using it:
+
+```bash
+<RUNTIME> manifest inspect ghcr.io/complytime/complypack:<VERSION> > /dev/null 2>&1
+```
+
+If the manifest check fails, the release tag does not have a corresponding
+container image. Fall back to `:main` and inform the user:
+
+> "No container image found for tag `<VERSION>`. Using `:main` instead.
+> The `:main` tag tracks the latest commit on the main branch."
+
+### Step 7: Write Configuration
+
+Apply the tool's setup steps:
+
+- **Claude Code**: Write `.mcp.json` (see below, `.mcp.json` format).
+- **OpenCode**: Write `opencode.json` (see below, `opencode.json` format).
+- **Cursor**: Write `.mcp.json` (see below, `.mcp.json` format).
 - **Unknown**: Write `.mcp.json` and inform the user about skill discovery.
-
-### Step 6: Write Configuration
 
 #### Claude Code / Cursor — `.mcp.json`
 
@@ -119,13 +133,13 @@ Then apply the selected tool's setup steps:
 {
   "mcpServers": {
     "gemara": {
-      "command": "podman",
+      "command": "<RUNTIME>",
       "args": ["run", "--rm", "-i",
                "ghcr.io/gemaraproj/gemara-mcp:<VERSION>",
                "serve"]
     },
     "complypack": {
-      "command": "podman",
+      "command": "<RUNTIME>",
       "args": ["run", "--rm", "-i",
                "ghcr.io/complytime/complypack:<VERSION>",
                "mcp", "serve",
@@ -147,13 +161,13 @@ If not, create a new file.
   "mcp": {
     "gemara": {
       "type": "local",
-      "command": ["podman", "run", "--rm", "-i",
+      "command": ["<RUNTIME>", "run", "--rm", "-i",
                   "ghcr.io/gemaraproj/gemara-mcp:<VERSION>",
                   "serve"]
     },
     "complypack": {
       "type": "local",
-      "command": ["podman", "run", "--rm", "-i",
+      "command": ["<RUNTIME>", "run", "--rm", "-i",
                   "ghcr.io/complytime/complypack:<VERSION>",
                   "mcp", "serve",
                   "--source", "<SOURCE>",
@@ -167,7 +181,7 @@ If not, create a new file.
 > `mcp` (not `mcpServers`). Each server has `"type": "local"` and
 > `command` is a single array (not split into `command` + `args`).
 
-### Step 7: Verify
+### Step 8: Verify
 
 Check that each server starts and responds. Report loaded catalogs and schemas.
 
