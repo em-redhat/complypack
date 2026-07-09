@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "complypack": {
+      "command": "podman",
+      "args": [
+        "run", "--rm", "-i",
+        "ghcr.io/complytime/complypack:VERSION",
+        "mcp", "serve",
+        "--source", "oci://YOUR_REGISTRY/YOUR_CATALOG:VERSION",
+        "--schema", "YOUR_PLATFORM"
+      ]
+    }
+  }
+}

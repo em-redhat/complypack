@@ -13,6 +13,29 @@ tasks:
     generates:
       - json-schema/*.json
 
+  sync-module:
+    desc: Copy skills and commands into module/ for lola distribution
+    cmds:
+      - rm -rf module/skills/mcp-setup module/skills/audit-pipeline module/skills/pack-assessment
+      - rm -f module/commands/comply-setup.md module/commands/comply-pipeline.md module/commands/comply-pack.md
+      - mkdir -p module/skills module/commands
+      - cp -r skills/mcp-setup module/skills/mcp-setup
+      - cp -r skills/audit-pipeline module/skills/audit-pipeline
+      - cp -r skills/pack-assessment module/skills/pack-assessment
+      - cp .opencode/commands/comply-setup.md module/commands/comply-setup.md
+      - cp .opencode/commands/comply-pipeline.md module/commands/comply-pipeline.md
+      - cp .opencode/commands/comply-pack.md module/commands/comply-pack.md
+
+  check-module-sync:
+    desc: Verify module/ skills and commands match their sources
+    cmds:
+      - diff -r skills/mcp-setup module/skills/mcp-setup
+      - diff -r skills/audit-pipeline module/skills/audit-pipeline
+      - diff -r skills/pack-assessment module/skills/pack-assessment
+      - diff .opencode/commands/comply-setup.md module/commands/comply-setup.md
+      - diff .opencode/commands/comply-pipeline.md module/commands/comply-pipeline.md
+      - diff .opencode/commands/comply-pack.md module/commands/comply-pack.md
+
   default:
     cmds:
       - task: generate-schemas
