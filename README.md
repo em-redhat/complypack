@@ -4,7 +4,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/complytime/complypack.svg)](https://pkg.go.dev/github.com/complytime/complypack)
 [![Go Report Card](https://goreportcard.com/badge/github.com/complytime/complypack)](https://goreportcard.com/report/github.com/complytime/complypack)
 
-ComplyPack is a CLI and Go library for packing, unpacking, signing, and verifying OCI artifacts containing policy bundles. It provides an evaluator-agnostic format for distributing compliance policies using OCI registries, and an MCP server for LLM-assisted policy generation.
+ComplyPack is a CLI and Go library for packing and unpacking OCI artifacts containing policy bundles. It provides an evaluator-agnostic format for distributing compliance policies using OCI registries, and an MCP server for LLM-assisted policy generation.
 
 ## Features
 
@@ -13,7 +13,6 @@ ComplyPack is a CLI and Go library for packing, unpacking, signing, and verifyin
 - **Policy Graph Resolution** - Resolve effective policies with overlays from Gemara bundles
 - **Evaluator-Agnostic** - Supports any policy language (OPA, CEL, etc.) via evaluator-id dispatch
 - **CUE Schema Sources** - Load platform schemas from CUE registry, HTTPS, or local files
-- **Signing & Verification** - Built-in support for keyed and keyless (Sigstore) signing
 
 ## Installation
 
@@ -184,14 +183,22 @@ ComplyPack uses sentinel errors:
 - `ErrInvalidConfig` — Config validation failed
 - `ErrEmptyContent` — Content reader returned zero bytes
 - `ErrContentTooLarge` — Content exceeds 100MB limit
-- `ErrSigningFailed` — Signing operation failed
-- `ErrVerificationFailed` — Signature verification failed
 - `ErrInvalidMediaType` — Unexpected media type in manifest
 - `ErrNoContentLayer` — Manifest missing content layer
 
+## Signing & Verification
+
+ComplyPack is a pure pack/unpack library and does not handle trust decisions. Sign artifacts with [cosign](https://docs.sigstore.dev/cosign/signing/overview/) after pushing to a registry:
+
+```bash
+complypack pack policy/ ghcr.io/org/my-policies:v1.0.0
+cosign sign ghcr.io/org/my-policies:v1.0.0
+```
+
+Verification is handled on the consumer side by [complyctl](https://github.com/complytime/complyctl).
+
 ## Current Limitations
 
-- **Signing/Verification**: Validation logic is implemented, but full sigstore-go integration is pending
 - **Content Size**: Maximum 100MB per artifact
 - **Single Content Layer**: Only one content layer per artifact is supported
 

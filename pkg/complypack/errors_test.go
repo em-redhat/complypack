@@ -16,8 +16,6 @@ func TestSentinelErrors(t *testing.T) {
 	}{
 		{"invalid config", complypack.ErrInvalidConfig},
 		{"empty content", complypack.ErrEmptyContent},
-		{"verification failed", complypack.ErrVerificationFailed},
-		{"signing failed", complypack.ErrSigningFailed},
 		{"invalid media type", complypack.ErrInvalidMediaType},
 		{"no content layer", complypack.ErrNoContentLayer},
 	}
