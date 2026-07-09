@@ -180,6 +180,17 @@ ComplyPack uses sentinel errors:
 - `ErrInvalidMediaType` — Unexpected media type in manifest
 - `ErrNoContentLayer` — Manifest missing content layer
 
+## Signing & Verification
+
+ComplyPack is a pure pack/unpack library and does not handle trust decisions. Sign artifacts with [cosign](https://docs.sigstore.dev/cosign/signing/overview/) after pushing to a registry:
+
+```bash
+complypack pack policy/ ghcr.io/org/my-policies:v1.0.0
+cosign sign ghcr.io/org/my-policies:v1.0.0
+```
+
+Verification is handled on the consumer side by [complyctl](https://github.com/complytime/complyctl).
+
 ## Current Limitations
 
 - **Content Size**: Maximum 100MB per artifact
