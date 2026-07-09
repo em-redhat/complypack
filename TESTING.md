@@ -78,8 +78,6 @@ func TestPackErrors(t *testing.T) {
 - `pkg/complypack/options_test.go`
 - `pkg/complypack/integration_test.go`
 - `pkg/complypack/unpack_test.go`
-- `pkg/complypack/sign_test.go`
-- `pkg/complypack/verify_test.go`
 
 **Pattern:** Refactor incrementally as files are touched. No need for mass refactoring.
 
