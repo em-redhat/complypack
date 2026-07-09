@@ -15,6 +15,8 @@ func New() *cobra.Command {
 
 	cmd.AddCommand(mcpCmd())
 	cmd.AddCommand(packCmd())
+	cmd.AddCommand(pullCmd())
+	cmd.AddCommand(cacheCmd())
 
 	return cmd
 }

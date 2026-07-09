@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"github.com/complytime/complypack/internal/cache"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/evaluator"
 	"github.com/complytime/complypack/internal/registry"
@@ -82,7 +83,7 @@ func NewServer(ctx context.Context, opts *ServerOptions) (*Server, error) {
 	// Load Gemara artifacts from all configured sources
 	loaded := requirement.NewArtifactSet()
 	for _, entry := range cfg.Gemara.Sources {
-		src, err := loadArtifacts(ctx, entry.Source, entry.PlainHTTP)
+		src, err := LoadArtifacts(ctx, entry.Source, entry.PlainHTTP, opts.CacheDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load artifacts from %s: %w", entry.Source, err)
 		}
@@ -278,8 +279,9 @@ func loadSchemas(ctx context.Context, schemaRefs []config.SchemaRef, reg *schema
 	return schemaMap, cueSchemaMap, nil
 }
 
-// loadArtifacts loads and classifies Gemara artifacts from either a file path or OCI reference.
-func loadArtifacts(ctx context.Context, source string, plainHTTP bool) (*requirement.ArtifactSet, error) {
+// LoadArtifacts loads and classifies Gemara artifacts from either a file path or OCI reference.
+// When cacheDir is non-empty, OCI artifacts are cached on disk for subsequent invocations.
+func LoadArtifacts(ctx context.Context, source string, plainHTTP bool, cacheDir string) (*requirement.ArtifactSet, error) {
 	if strings.HasPrefix(source, "file://") {
 		path := strings.TrimPrefix(source, "file://")
 		return loadFileArtifacts(ctx, path)
@@ -287,11 +289,11 @@ func loadArtifacts(ctx context.Context, source string, plainHTTP bool) (*require
 
 	if strings.HasPrefix(source, "oci://") {
 		ref := strings.TrimPrefix(source, "oci://")
-		return loadBundleArtifacts(ctx, ref, plainHTTP)
+		return loadBundleArtifacts(ctx, ref, plainHTTP, cacheDir)
 	}
 
 	if isOCIReference(source) {
-		return loadBundleArtifacts(ctx, source, plainHTTP)
+		return loadBundleArtifacts(ctx, source, plainHTTP, cacheDir)
 	}
 
 	return loadFileArtifacts(ctx, source)
@@ -311,7 +313,7 @@ func loadFileArtifacts(ctx context.Context, path string) (*requirement.ArtifactS
 	return result, nil
 }
 
-func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool) (*requirement.ArtifactSet, error) {
+func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool, cacheDir string) (*requirement.ArtifactSet, error) {
 	credFunc, err := registry.NewCredentialFunc()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load registry credentials: %w", err)
@@ -324,7 +326,18 @@ func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool) (*requ
 
 	tag := registry.ParseTag(ref)
 
-	store := memory.New()
+	// Use on-disk OCI store when cacheDir is set, otherwise fall back to in-memory.
+	var store oras.Target
+	if cacheDir != "" {
+		ociStore, err := cache.NewOCIStore(cacheDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open cache store: %w", err)
+		}
+		store = ociStore
+	} else {
+		store = memory.New()
+	}
+
 	_, err = oras.Copy(ctx, repo, tag, store, tag, oras.DefaultCopyOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pull from registry: %w", err)
