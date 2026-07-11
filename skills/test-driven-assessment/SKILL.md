@@ -1,6 +1,6 @@
 ---
 name: test-driven-assessment
-invocable: false
+user-invocable: false
 description: Use before generating any Rego policy or assessment logic — generates human-reviewable test cases from assessment requirements before any policy is written
 ---
 

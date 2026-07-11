@@ -1,13 +1,16 @@
 ---
 name: pack-assessment
+user-invocable: false
 description: Use when user mentions Rego, Conftest, OPA, AMPEL, "generate policy", or "assessment logic" in the context of Gemara catalogs. Generates policies from Gemara Control Catalogs for Kubernetes (Deployments, Pods, DaemonSets, StatefulSets, CronJobs, Jobs, Services, NetworkPolicies, Ingress, RBAC, ConfigMaps, Secrets), CI/CD pipelines (GitHub Actions, GitLab CI, Azure Pipelines), Conftest, OPA, or AMPEL
 ---
 
 # /comply:pack-assessment — Rego Policy Generation and Assessment
 
-Generate Rego policies from Gemara Control Catalogs that enforce compliance requirements. Policies must be written to disk, validated against the target platform schema, and tested with sample inputs.
+> **Internal skill** — invoked by `comply:build-assessment`, not directly by users. Use `/comply:build-assessment` or `/comply:build-assessment batch` instead.
 
-**Core principle:** Read control definitions from source → Generate platform-specific policy → Write to disk → Verify it works.
+Generate Rego policies from Gemara Control Catalogs that enforce compliance requirements.
+
+**Core principle:** Read control definitions from source → Generate policy to satisfy approved tests → Verify it works.
 
 ## Quick Reference
 
@@ -148,11 +151,13 @@ Generate one JSON file per assessment requirement (granular policy), then merge 
 - `tenets[].predicates.types` lists the attestation predicate type URIs the tenet evaluates
 - Write granular files to the policy output directory, then merge into `complytime-ampel-policy.json`
 
-## Step 9: Validate — Contract Check First
+## Step 9: Validate — Contract Check Then Test Suite
 
 1. Run `validate_policy` — confirm zero contract violations against the platform schema
 2. If contract violations: fix the `input.*` paths to match the schema. The schema is the source of truth, not test data.
-3. Run `test_policy` — confirm policy logic works with sample inputs
+3. Run `test_policy` with the combined policy + test content as `policyContent` — both are in the same package, so OPA compiles and runs them together
+4. If tests fail: revise the **policy**, not the tests. The tests were human-approved by `comply:test-driven-assessment` and represent the requirement.
+5. Do not write the final policy artifact until all tests pass
 
 ## Safety
 
@@ -177,3 +182,4 @@ Generate one JSON file per assessment requirement (granular policy), then merge 
 - [ ] Did you read control text from MCP, not from general knowledge?
 - [ ] Did you call `get_automation_triage` to determine which plans are automated?
 - [ ] Did you generate the provider-specific mapping file (`complytime-mapping.json` for OPA, `complytime-ampel-policy.json` for Ampel)?
+- [ ] Did you avoid modifying approved test cases to make the policy pass?
