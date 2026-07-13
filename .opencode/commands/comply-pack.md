@@ -1,5 +1,5 @@
 ---
-description: Generate Rego policies from the child policy
+description: Generate test-driven Rego policies (single or batch mode)
 ---
 
 Load the `build-assessment` skill and execute it. Read `.complytime/child-policy.yaml`

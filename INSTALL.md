@@ -21,7 +21,7 @@ Add the ComplyTime marketplace and install the plugin:
 /plugin install comply@complytime
 ```
 
-The skills (`/comply:mcp-setup`, `/comply:pack-assessment`, `/comply:audit-pipeline`) are
+The skills (`/comply:mcp-setup`, `/comply:build-assessment`, `/comply:audit-pipeline`) are
 auto-discovered once the plugin is installed. To configure the MCP server,
 create a `.mcp.json` in your project:
 
