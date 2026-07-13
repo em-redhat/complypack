@@ -8,7 +8,9 @@ an MCP server for working with Gemara catalogs.
 - Podman or Docker
 
 > **Note:** All examples below use `podman`. Docker users can substitute
-> `docker` directly — the commands are interchangeable.
+> `docker` directly — the commands are interchangeable. The setup command
+> (`/comply:mcp-setup` or `/comply-setup`) auto-detects which runtime is
+> available and generates the correct configuration.
 
 ## Claude Code
 
