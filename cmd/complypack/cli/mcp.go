@@ -100,7 +100,7 @@ The server runs until interrupted (Ctrl+C) or the client disconnects.`,
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "complypack.yaml", "Path to complypack.yaml config file")
-	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", "Cache directory (default: $XDG_CACHE_HOME/complypack or $HOME/.complypack/cache)")
+	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", cache.CacheDirHelp)
 	cmd.Flags().StringArrayVar(&sources, "source", nil, "Gemara OCI source (repeatable, e.g. oci://ghcr.io/org/catalog:v1)")
 	cmd.Flags().StringArrayVar(&schemas, "schema", nil, "Platform schema (repeatable, e.g. kubernetes or ci=cue://...)")
 

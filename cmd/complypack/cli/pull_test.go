@@ -3,8 +3,12 @@
 package cli
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/complytime/complypack/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,24 +28,43 @@ func TestPullCommand(t *testing.T) {
 	assert.NotNil(t, flags.Lookup("cache-dir"), "should have --cache-dir flag")
 }
 
-func TestIsOCISource(t *testing.T) {
-	tests := []struct {
-		source string
-		want   bool
-	}{
-		{"oci://ghcr.io/org/catalog:v1", true},
-		{"oci+http://localhost:5000/catalog:v1", true},
-		{"ghcr.io/org/catalog:v1", true},
-		{"localhost:5000/catalog:v1", true},
-		{"file:///path/to/catalog.yaml", false},
-		{"/local/path/catalog.yaml", false},
-		{"catalog.yaml", false},
+func TestPullSources_SkipsFileSource(t *testing.T) {
+	ctx := context.Background()
+	cacheDir := t.TempDir()
+
+	// Create a local catalog file
+	catalogPath := filepath.Join(t.TempDir(), "catalog.yaml")
+	err := os.WriteFile(catalogPath, []byte(`metadata:
+  id: test-catalog
+  type: ControlCatalog
+  gemara-version: "1.0.0"
+controls:
+  - id: AC-1
+    title: Test
+    description: Test control
+`), 0600)
+	require.NoError(t, err)
+
+	cfg := &config.ComplyPackConfig{
+		Gemara: config.GemaraConfig{
+			Sources: []config.GemaraSourceEntry{
+				{Source: catalogPath},
+			},
+		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.source, func(t *testing.T) {
-			got := isOCISource(tt.source)
-			assert.Equal(t, tt.want, got)
-		})
-	}
+	result, err := pullSources(ctx, cfg, cacheDir)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Pulled)
+	assert.Equal(t, 1, result.Skipped)
+	assert.Empty(t, result.Errors)
+}
+
+func TestPullSources_NoSources(t *testing.T) {
+	ctx := context.Background()
+	cfg := &config.ComplyPackConfig{}
+
+	_, err := pullSources(ctx, cfg, t.TempDir())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no gemara sources configured")
 }

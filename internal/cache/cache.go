@@ -10,10 +10,13 @@ import (
 	"oras.land/oras-go/v2/content/oci"
 )
 
+// CacheDirHelp is the user-facing description for --cache-dir flag help text.
+const CacheDirHelp = "Cache directory (default: $XDG_CACHE_HOME/complypack or $HOME/.cache/complypack)"
+
 // ResolveDir resolves the cache directory using the following priority:
 //  1. explicit flag value (if non-empty)
 //  2. $XDG_CACHE_HOME/complypack (if XDG_CACHE_HOME is set and non-empty)
-//  3. $HOME/.complypack/cache (fallback)
+//  3. $HOME/.cache/complypack (per XDG Base Directory Specification fallback)
 //
 // Returns an error if neither HOME nor XDG_CACHE_HOME is set and no explicit
 // value is provided.
@@ -30,7 +33,7 @@ func ResolveDir(explicit string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve cache directory: HOME is not set and --cache-dir was not provided: %w", err)
 	}
-	return filepath.Join(home, ".complypack", "cache"), nil
+	return filepath.Join(home, ".cache", "complypack"), nil
 }
 
 // NewOCIStore creates or opens an OCI Image Layout store at the given directory.
@@ -47,21 +50,24 @@ func NewOCIStore(cacheDir string) (*oci.Store, error) {
 	return store, nil
 }
 
-// Clean removes all contents of the cache directory. If the directory does not
-// exist, Clean returns nil (not an error).
+// Clean removes all contents of the cache directory while preserving the
+// directory itself. This avoids invalidating the directory inode, which could
+// cause issues for other processes that hold a reference to it.
+// If the directory does not exist, Clean returns nil (not an error).
 func Clean(cacheDir string) error {
-	info, err := os.Stat(cacheDir)
+	entries, err := os.ReadDir(cacheDir)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("failed to access cache directory %s: %w", cacheDir, err)
+		return fmt.Errorf("failed to read cache directory %s: %w", cacheDir, err)
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("cache path %s is not a directory", cacheDir)
-	}
-	if err := os.RemoveAll(cacheDir); err != nil {
-		return fmt.Errorf("failed to clean cache directory %s: %w", cacheDir, err)
+
+	for _, entry := range entries {
+		path := filepath.Join(cacheDir, entry.Name())
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("failed to remove %s: %w", path, err)
+		}
 	}
 	return nil
 }

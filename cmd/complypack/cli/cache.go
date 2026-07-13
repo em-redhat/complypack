@@ -5,7 +5,6 @@ package cli
 import (
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/complytime/complypack/internal/cache"
 	"github.com/spf13/cobra"
@@ -36,7 +35,7 @@ func cacheCleanCmd() *cobra.Command {
 The cache directory is resolved in order:
   1. --cache-dir flag value
   2. $XDG_CACHE_HOME/complypack
-  3. $HOME/.complypack/cache
+  3. $HOME/.cache/complypack
 
 Examples:
   complypack cache clean
@@ -45,12 +44,6 @@ Examples:
 			resolvedCacheDir, err := cache.ResolveDir(cacheDir)
 			if err != nil {
 				return fmt.Errorf("failed to resolve cache directory: %w", err)
-			}
-
-			// Check if cache exists
-			if _, err := os.Stat(resolvedCacheDir); os.IsNotExist(err) {
-				log.Printf("No cache exists at %s", resolvedCacheDir)
-				return nil
 			}
 
 			if err := cache.Clean(resolvedCacheDir); err != nil {
@@ -62,7 +55,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", "Cache directory (default: $XDG_CACHE_HOME/complypack or $HOME/.complypack/cache)")
+	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", cache.CacheDirHelp)
 
 	return cmd
 }

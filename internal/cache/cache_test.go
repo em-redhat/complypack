@@ -32,7 +32,7 @@ func TestResolveDir(t *testing.T) {
 		assert.Equal(t, "/home/user/.cache/complypack", dir)
 	})
 
-	t.Run("falls back to HOME when XDG_CACHE_HOME is not set", func(t *testing.T) {
+	t.Run("falls back to HOME/.cache/complypack per XDG spec", func(t *testing.T) {
 		t.Setenv("XDG_CACHE_HOME", "")
 		// HOME is typically always set in test environments
 		homeDir, err := os.UserHomeDir()
@@ -40,7 +40,7 @@ func TestResolveDir(t *testing.T) {
 
 		dir, err := ResolveDir("")
 		require.NoError(t, err)
-		assert.Equal(t, filepath.Join(homeDir, ".complypack", "cache"), dir)
+		assert.Equal(t, filepath.Join(homeDir, ".cache", "complypack"), dir)
 	})
 
 	t.Run("empty XDG_CACHE_HOME treated as unset", func(t *testing.T) {
@@ -50,7 +50,7 @@ func TestResolveDir(t *testing.T) {
 
 		dir, err := ResolveDir("")
 		require.NoError(t, err)
-		assert.Equal(t, filepath.Join(homeDir, ".complypack", "cache"), dir)
+		assert.Equal(t, filepath.Join(homeDir, ".cache", "complypack"), dir)
 	})
 }
 
@@ -90,19 +90,28 @@ func TestNewOCIStore(t *testing.T) {
 }
 
 func TestClean(t *testing.T) {
-	t.Run("removes existing cache directory", func(t *testing.T) {
+	t.Run("removes contents but preserves directory", func(t *testing.T) {
 		dir := t.TempDir()
 
-		// Create some files in the cache
+		// Create some files and a subdirectory in the cache
 		err := os.WriteFile(filepath.Join(dir, "test.txt"), []byte("data"), 0600)
+		require.NoError(t, err)
+		err = os.MkdirAll(filepath.Join(dir, "subdir"), 0750)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(dir, "subdir", "nested.txt"), []byte("nested"), 0600)
 		require.NoError(t, err)
 
 		err = Clean(dir)
 		require.NoError(t, err)
 
-		// Verify directory was removed
-		_, err = os.Stat(dir)
-		assert.True(t, os.IsNotExist(err))
+		// Verify directory still exists but is empty
+		info, err := os.Stat(dir)
+		require.NoError(t, err)
+		assert.True(t, info.IsDir())
+
+		entries, err := os.ReadDir(dir)
+		require.NoError(t, err)
+		assert.Empty(t, entries, "directory should be empty after clean")
 	})
 
 	t.Run("non-existent directory returns nil", func(t *testing.T) {
@@ -110,17 +119,5 @@ func TestClean(t *testing.T) {
 
 		err := Clean(dir)
 		require.NoError(t, err)
-	})
-
-	t.Run("errors on non-directory path", func(t *testing.T) {
-		// Create a file, not a directory
-		tmpDir := t.TempDir()
-		filePath := filepath.Join(tmpDir, "not-a-dir")
-		err := os.WriteFile(filePath, []byte("data"), 0600)
-		require.NoError(t, err)
-
-		err = Clean(filePath)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "not a directory")
 	})
 }

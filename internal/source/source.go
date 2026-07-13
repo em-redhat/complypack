@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/complytime/complypack/internal/cache"
 	"github.com/complytime/complypack/internal/registry"
@@ -17,7 +18,33 @@ import (
 
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content/memory"
+	"oras.land/oras-go/v2/content/oci"
 )
+
+// ociStoreCache caches OCI store instances by directory path to avoid
+// re-walking the OCI layout on every loadBundleArtifacts call.
+var (
+	ociStoreMu    sync.Mutex
+	ociStoreCache = make(map[string]*oci.Store)
+)
+
+// getOrCreateOCIStore returns a cached OCI store for the given directory,
+// creating it if needed.
+func getOrCreateOCIStore(cacheDir string) (*oci.Store, error) {
+	ociStoreMu.Lock()
+	defer ociStoreMu.Unlock()
+
+	if store, ok := ociStoreCache[cacheDir]; ok {
+		return store, nil
+	}
+
+	store, err := cache.NewOCIStore(cacheDir)
+	if err != nil {
+		return nil, err
+	}
+	ociStoreCache[cacheDir] = store
+	return store, nil
+}
 
 // LoadArtifacts loads and classifies Gemara artifacts from either a file path or OCI reference.
 // When cacheDir is non-empty, OCI artifacts are cached on disk for subsequent invocations.
@@ -69,7 +96,7 @@ func loadBundleArtifacts(ctx context.Context, ref string, plainHTTP bool, cacheD
 	// Use on-disk OCI store when cacheDir is set, otherwise fall back to in-memory.
 	var store oras.Target
 	if cacheDir != "" {
-		ociStore, err := cache.NewOCIStore(cacheDir)
+		ociStore, err := getOrCreateOCIStore(cacheDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open cache store: %w", err)
 		}
