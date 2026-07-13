@@ -51,3 +51,22 @@ jobs:
         run: |
           go test -race -coverprofile=coverage.out -covermode=atomic ./...
           go tool cover -func=coverage.out | tail -1
+
+  module-sync:
+    name: Module Sync Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Verify module copies match sources
+        run: |
+          diff -r skills/mcp-setup module/skills/mcp-setup
+          diff -r skills/audit-pipeline module/skills/audit-pipeline
+          diff -r skills/pack-assessment module/skills/pack-assessment
+          diff .opencode/commands/comply-setup.md module/commands/comply-setup.md
+          diff .opencode/commands/comply-pipeline.md module/commands/comply-pipeline.md
+          diff .opencode/commands/comply-pack.md module/commands/comply-pack.md
