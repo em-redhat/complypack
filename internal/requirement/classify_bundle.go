@@ -8,18 +8,13 @@ import (
 	"github.com/gemaraproj/go-gemara/bundle"
 )
 
-// ClassifyBundle classifies a bundle's files and imports into an ArtifactSet.
+// ClassifyBundle classifies a bundle's source and imports into an ArtifactSet.
 func ClassifyBundle(b *bundle.Bundle) (*ArtifactSet, error) {
-	if len(b.Files) == 0 {
+	if len(b.Source.Data) == 0 {
 		return nil, fmt.Errorf("bundle has no primary files")
 	}
 
-	var leafData [][]byte
-	for _, f := range b.Files {
-		leafData = append(leafData, f.Data)
-	}
-
-	result, err := Classify(leafData...)
+	result, err := Classify(b.Source.Data)
 	if err != nil {
 		return nil, fmt.Errorf("classifying leaf artifacts: %w", err)
 	}

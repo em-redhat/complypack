@@ -13,8 +13,8 @@ import (
 func TestClassifyBundle(t *testing.T) {
 	t.Run("policy with catalog import", func(t *testing.T) {
 		b := &bundle.Bundle{
-			Files: []bundle.File{
-				{Name: "policy.yaml", Type: "Policy", Data: []byte(testPolicyYAML)},
+			Source: bundle.File{
+				Name: "policy.yaml", Type: "Policy", Data: []byte(testPolicyYAML),
 			},
 			Imports: []bundle.File{
 				{Name: "catalog.yaml", Type: "ControlCatalog", Data: []byte(testControlCatalogYAML)},
@@ -38,8 +38,8 @@ func TestClassifyBundle(t *testing.T) {
 
 	t.Run("catalog only", func(t *testing.T) {
 		b := &bundle.Bundle{
-			Files: []bundle.File{
-				{Name: "catalog.yaml", Type: "ControlCatalog", Data: []byte(testControlCatalogYAML)},
+			Source: bundle.File{
+				Name: "catalog.yaml", Type: "ControlCatalog", Data: []byte(testControlCatalogYAML),
 			},
 		}
 
