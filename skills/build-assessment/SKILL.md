@@ -175,12 +175,12 @@ Process all requirements at once in two phases.
 
 ## Red Flags — STOP AND FIX IF THERE ARE ISSUES
 
-- [ ] MCP is unreachable — **STOP.** Do not generate from general knowledge. Inform the user and wait.
-- [ ] No approved test files before policy generation — **STOP.** Tests come first.
-- [ ] `input.*` paths not in the platform schema — **STOP.** Fix to match schema.
-- [ ] Hardcoded values from sample inputs instead of parameters — **STOP.** Use `get_assessment_requirements`.
-- [ ] Approved test cases modified to make policy pass — **STOP.** Revert tests, fix policy.
-- [ ] Missing deny or allow test for a requirement — **STOP.** Add the missing test.
-- [ ] Control IDs or parameter values from model memory — **STOP.** Re-read from MCP.
-- [ ] User has not approved test scenarios (single mode) — **STOP.** Wait for approval.
-- [ ] `validate_policy` not run before `test_policy` — **STOP.** Contract check first.
+- [ ] MCP is unreachable → **STOP.** Do not generate from general knowledge. Inform the user and wait.
+- [ ] No approved test files before policy generation → **STOP.** Tests come first.
+- [ ] `input.*` paths not in the platform schema → **STOP.** Fix to match schema.
+- [ ] Hardcoded values from sample inputs instead of parameters → **STOP.** Use `get_assessment_requirements`.
+- [ ] Approved test cases modified to make policy pass → **STOP.** Revert tests, fix policy.
+- [ ] Missing deny or allow test for a requirement → **STOP.** Add the missing test.
+- [ ] Control IDs or parameter values from model memory → **STOP.** Re-read from MCP.
+- [ ] User has not approved test scenarios (single mode) → **STOP.** Wait for approval.
+- [ ] `validate_policy` not run before `test_policy` → **STOP.** Contract check first.
