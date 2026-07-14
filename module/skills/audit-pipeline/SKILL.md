@@ -19,7 +19,7 @@ Guide users through building a Gemara Policy (applicability statement) from thei
 | mapping   | `.complytime/delta-report.yaml`   | Parameter delta analysis + harmonization across framework layers |
 | adherence | `.complytime/child-policy.yaml`   | Compile the child Policy with adherence plan                     |
 
-After adherence, invoke `/comply:pack-assessment` to generate assessment logic for use with `complyctl`.
+After adherence, invoke `/comply:build-assessment` to generate assessment logic for use with `complyctl`.
 
 ## Router Logic
 
@@ -28,7 +28,7 @@ After adherence, invoke `/comply:pack-assessment` to generate assessment logic f
    - No `.complytime/` directory → start at **scoping**
    - `scoping.yaml` exists but no `delta-report.yaml` → offer **mapping**
    - `delta-report.yaml` exists but no `child-policy.yaml` → offer **adherence**
-   - `child-policy.yaml` exists → pipeline complete, offer to re-run any stage or proceed to `/comply:pack-assessment`
+   - `child-policy.yaml` exists → pipeline complete, offer to re-run any stage or proceed to `/comply:build-assessment`
 3. If the user specified a stage, validate prerequisites:
    - **mapping** requires `scoping.yaml`
    - **adherence** requires `delta-report.yaml`

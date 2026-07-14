@@ -16,12 +16,14 @@ tasks:
   sync-module:
     desc: Copy skills and commands into module/ for lola distribution
     cmds:
-      - rm -rf module/skills/mcp-setup module/skills/audit-pipeline module/skills/pack-assessment
+      - rm -rf module/skills/mcp-setup module/skills/audit-pipeline module/skills/build-assessment module/skills/test-driven-assessment module/skills/using-complypack
       - rm -f module/commands/comply-setup.md module/commands/comply-pipeline.md module/commands/comply-pack.md
       - mkdir -p module/skills module/commands
       - cp -r skills/mcp-setup module/skills/mcp-setup
       - cp -r skills/audit-pipeline module/skills/audit-pipeline
-      - cp -r skills/pack-assessment module/skills/pack-assessment
+      - cp -r skills/build-assessment module/skills/build-assessment
+      - cp -r skills/test-driven-assessment module/skills/test-driven-assessment
+      - cp -r skills/using-complypack module/skills/using-complypack
       - cp .opencode/commands/comply-setup.md module/commands/comply-setup.md
       - cp .opencode/commands/comply-pipeline.md module/commands/comply-pipeline.md
       - cp .opencode/commands/comply-pack.md module/commands/comply-pack.md
@@ -31,7 +33,9 @@ tasks:
     cmds:
       - diff -r skills/mcp-setup module/skills/mcp-setup
       - diff -r skills/audit-pipeline module/skills/audit-pipeline
-      - diff -r skills/pack-assessment module/skills/pack-assessment
+      - diff -r skills/build-assessment module/skills/build-assessment
+      - diff -r skills/test-driven-assessment module/skills/test-driven-assessment
+      - diff -r skills/using-complypack module/skills/using-complypack
       - diff .opencode/commands/comply-setup.md module/commands/comply-setup.md
       - diff .opencode/commands/comply-pipeline.md module/commands/comply-pipeline.md
       - diff .opencode/commands/comply-pack.md module/commands/comply-pack.md

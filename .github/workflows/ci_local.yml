@@ -66,7 +66,9 @@ jobs:
         run: |
           diff -r skills/mcp-setup module/skills/mcp-setup
           diff -r skills/audit-pipeline module/skills/audit-pipeline
-          diff -r skills/pack-assessment module/skills/pack-assessment
+          diff -r skills/build-assessment module/skills/build-assessment
+          diff -r skills/test-driven-assessment module/skills/test-driven-assessment
+          diff -r skills/using-complypack module/skills/using-complypack
           diff .opencode/commands/comply-setup.md module/commands/comply-setup.md
           diff .opencode/commands/comply-pipeline.md module/commands/comply-pipeline.md
           diff .opencode/commands/comply-pack.md module/commands/comply-pack.md

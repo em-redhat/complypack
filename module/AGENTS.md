@@ -15,20 +15,22 @@ in your tool's MCP configuration. See `mcps.json` for the base template.
 
 | Skill | Trigger | Purpose |
 |-------|---------|---------|
+| `using-complypack` | Starting any compliance task | Establishes skill ordering and MCP grounding requirements |
 | `mcp-setup` | User wants to configure MCP servers | Interactive setup wizard for complypack and gemara MCP servers |
 | `audit-pipeline` | User wants to build compliance artifacts or prepare for audit | Three-stage pipeline: scoping, mapping, adherence |
-| `pack-assessment` | User mentions Rego, Conftest, OPA, or policy generation | Generate Rego policies from Gemara catalogs |
+| `build-assessment` | User mentions Rego, Conftest, OPA, or policy generation | Test-driven Rego policy generation from Gemara catalogs |
+| `test-driven-assessment` | Internal (invoked by build-assessment) | Generates human-reviewable test cases before policy is written |
 
 ### Pipeline Flow
 
 ```
-scoping -> mapping -> adherence -> pack-assessment
+scoping -> mapping -> adherence -> build-assessment
 ```
 
 1. **Scoping** -- Characterize the system, scope control catalogs, identify gaps
 2. **Mapping** -- Crosswalk frameworks, harmonize parameters across layers
 3. **Adherence** -- Compile a Gemara Policy with assessment plans
-4. **Pack** -- Generate Rego policies for automated assessment plans
+4. **Build Assessment** -- Generate test cases, then Rego policies for automated assessment plans
 
 ## Commands
 
@@ -36,7 +38,7 @@ scoping -> mapping -> adherence -> pack-assessment
 |---------|-------------|
 | `/comply-setup` | Configure complypack MCP server for this project |
 | `/comply-pipeline` | Run the comply pipeline (scoping, mapping, adherence) |
-| `/comply-pack` | Generate Rego policies from the child policy |
+| `/comply-pack` | Generate test-driven Rego policies (single or batch mode) |
 
 ## Safety
 
