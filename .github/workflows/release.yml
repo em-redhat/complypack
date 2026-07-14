@@ -40,10 +40,7 @@ jobs:
           git log "$(git describe --tags --abbrev=0 HEAD^)"..HEAD --pretty=format:"- %s" >> CHANGELOG.md
 
       - name: Create Release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
-        with:
-          body_path: CHANGELOG.md
-          draft: false
-          prerelease: false
+        run: gh release create "${TAG_NAME}" --notes-file CHANGELOG.md --verify-tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
