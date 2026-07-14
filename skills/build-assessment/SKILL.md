@@ -79,7 +79,7 @@ If the user selects "Adjust", wait for their changes, apply them, and re-present
 ### Pause 3: Show Draft Test for Approval
 
 Generate a complete `_test.rego` file with:
-- `package policy` and `import rego.v1`
+- A unique package namespace derived from the requirement (e.g., `package kubernetes.run_as_nonroot`) and `import rego.v1`. Do NOT use `package main` or a shared name like `package policy` — the OPA provider passes each namespace as `conftest --namespace` for per-requirement evaluation, so every policy file must have its own namespace. The test file must use the same package as its corresponding policy file. The namespace must be a valid Rego identifier — each dot-separated segment must start with a letter and contain only letters, digits, and underscores (e.g., replace hyphens with underscores).
 - One `test_deny_*` function — input that should trigger a violation, using `with input as {...}` with inline test data
 - One `test_allow_*` function — input that should pass cleanly, using `with input as {...}` with inline test data
 - One-line comment per test function stating what it checks in plain language
@@ -105,6 +105,7 @@ On approval, write the test file to `policy/<requirement>_test.rego`.
    - Write `input.*` paths from the platform schema — do not reverse-engineer from sample manifests
    - Incorporate any helpers provided before the loop
    - One file per requirement, named `policy/<requirement>.rego`
+   - Declare the same unique package namespace used in the test file (e.g., `package kubernetes.run_as_nonroot`). Do NOT use `package main`.
    - Use `deny contains msg if { ... }` format with `import rego.v1`
    - Identify the subject in denial messages using schema fields (e.g., `input.metadata.name`)
    - No hardcoded values from test data
@@ -138,6 +139,7 @@ Process all requirements at once in two phases.
    - Call `get_assessment_requirements` for parameters
    - Read the platform schema
    - Generate one `test_deny_*` and one `test_allow_*` function with inline `with input as` data
+   - Each test file must declare a unique package namespace derived from the requirement (not `package main`)
 4. Present all test cases together with requirement IDs and descriptions
 5. Counter: **"Generated tests for N of M requirements"**
 6. Use `AskUserQuestion`:
@@ -175,12 +177,13 @@ Process all requirements at once in two phases.
 
 ## Red Flags — STOP AND FIX IF THERE ARE ISSUES
 
-- [ ] MCP is unreachable → **STOP.** Do not generate from general knowledge. Inform the user and wait.
-- [ ] No approved test files before policy generation → **STOP.** Tests come first.
-- [ ] `input.*` paths not in the platform schema → **STOP.** Fix to match schema.
-- [ ] Hardcoded values from sample inputs instead of parameters → **STOP.** Use `get_assessment_requirements`.
-- [ ] Approved test cases modified to make policy pass → **STOP.** Revert tests, fix policy.
-- [ ] Missing deny or allow test for a requirement → **STOP.** Add the missing test.
-- [ ] Control IDs or parameter values from model memory → **STOP.** Re-read from MCP.
-- [ ] User has not approved test scenarios (single mode) → **STOP.** Wait for approval.
-- [ ] `validate_policy` not run before `test_policy` → **STOP.** Contract check first.
+- [ ] MCP is unreachable — **STOP.** Do not generate from general knowledge. Inform the user and wait.
+- [ ] No approved test files before policy generation — **STOP.** Tests come first.
+- [ ] `input.*` paths not in the platform schema — **STOP.** Fix to match schema.
+- [ ] Hardcoded values from sample inputs instead of parameters — **STOP.** Use `get_assessment_requirements`.
+- [ ] Approved test cases modified to make policy pass — **STOP.** Revert tests, fix policy.
+- [ ] Missing deny or allow test for a requirement — **STOP.** Add the missing test.
+- [ ] Control IDs or parameter values from model memory — **STOP.** Re-read from MCP.
+- [ ] User has not approved test scenarios (single mode) — **STOP.** Wait for approval.
+- [ ] `validate_policy` not run before `test_policy` — **STOP.** Contract check first.
+- [ ] Multiple `.rego` files share the same package namespace (e.g., all use `package main`) — **STOP.** Each file must declare a unique namespace for per-requirement conftest evaluation.
