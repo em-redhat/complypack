@@ -171,7 +171,7 @@ Assessment plans: 12 total
   Automated (evaluator: <evaluator-name>): 8 requirements
   Manual: 4 requirements
 
-Invoke /comply:pack-assessment to generate assessment logic for the 8 automated requirements.
+Invoke /comply:build-assessment to generate assessment logic for the 8 automated requirements.
 ```
 
 ## MCP Resources and Tools

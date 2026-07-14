@@ -53,7 +53,7 @@ Create symlinks (`.opencode/` is already gitignored):
 ```bash
 mkdir -p .opencode/skills
 ln -s ../../skills/audit-pipeline .opencode/skills/audit-pipeline
-ln -s ../../skills/pack-assessment .opencode/skills/pack-assessment
+ln -s ../../skills/build-assessment .opencode/skills/build-assessment
 ln -s ../../skills/mcp-setup .opencode/skills/mcp-setup
 ```
 

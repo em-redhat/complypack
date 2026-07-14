@@ -164,7 +164,7 @@ to prompting the user with the supported tool list. Never guess silently.
   ```bash
   mkdir -p .opencode/skills
   ln -sf ../../skills/audit-pipeline .opencode/skills/audit-pipeline
-  ln -sf ../../skills/pack-assessment .opencode/skills/pack-assessment
+  ln -sf ../../skills/build-assessment .opencode/skills/build-assessment
   ln -sf ../../skills/mcp-setup .opencode/skills/mcp-setup
   ```
 - **Cursor**: Write `.mcp.json` (see Step 7, `.mcp.json` format).
@@ -229,6 +229,6 @@ If not, create a new file.
 
 Check that each server starts and responds. Report loaded catalogs and schemas.
 
-**Claude Code**: Inform user to use `/comply:audit-pipeline` or `/comply:pack-assessment`.
+**Claude Code**: Inform user to use `/comply:audit-pipeline` or `/comply:build-assessment`.
 
 **OpenCode**: Inform user to use `/comply-pipeline` or `/comply-pack` (custom commands) or to ask "run the comply pipeline" (skill-based invocation).
