@@ -15,6 +15,10 @@ import (
 
 const OPAEvaluatorID = "opa"
 
+// OPAMappingFile is the filename the OPA provider requires in the content
+// directory to map Rego package namespaces to assessment plan requirement IDs.
+const OPAMappingFile = "complytime-mapping.json"
+
 // OPA implements the Evaluator interface for Open Policy Agent policies.
 type OPA struct{}
 
@@ -86,6 +90,10 @@ func (o *OPA) Lint(filename string, src string) ([]LintWarning, error) {
 
 func (o *OPA) FileExtension() string {
 	return ".rego"
+}
+
+func (o *OPA) RequiredFiles() []string {
+	return []string{OPAMappingFile}
 }
 
 // DefaultRegistry creates a registry pre-populated with the OPA evaluator.

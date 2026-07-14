@@ -184,6 +184,18 @@ func runPrePackValidation(ctx context.Context, cfg *config.ComplyPackConfig, con
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
+	if len(result.MissingFiles) > 0 {
+		log.Printf("  missing required files: %d", len(result.MissingFiles))
+		for _, f := range result.MissingFiles {
+			log.Printf("    %s", f)
+		}
+		return fmt.Errorf(
+			"content directory is missing required file(s) for evaluator %q; "+
+				"run the assessment skill to generate them",
+			cfg.EvaluatorID,
+		)
+	}
+
 	log.Printf("  files checked: %d", result.FilesChecked)
 
 	if len(result.SyntaxErrors) > 0 {

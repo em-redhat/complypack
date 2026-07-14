@@ -4,6 +4,7 @@ package prepack
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -22,6 +23,7 @@ type ValidationOptions struct {
 // ValidationResult holds the outcome of the pre-pack validation pipeline.
 type ValidationResult struct {
 	FilesChecked       int
+	MissingFiles       []string
 	SyntaxErrors       []FileError
 	ContractViolations []evaluator.ContractViolation
 	TestResults        *evaluator.TestResults
@@ -37,6 +39,9 @@ type FileError struct {
 // Valid returns true if there are no syntax errors, contract violations,
 // or test failures.
 func (r *ValidationResult) Valid() bool {
+	if len(r.MissingFiles) > 0 {
+		return false
+	}
 	if len(r.SyntaxErrors) > 0 || len(r.ContractViolations) > 0 {
 		return false
 	}
@@ -47,7 +52,8 @@ func (r *ValidationResult) Valid() bool {
 }
 
 // Validate runs the pre-pack validation pipeline against a content directory.
-// Three stages execute in order, each fail-fast:
+// Four stages execute in order, each fail-fast:
+//  0. Required files -- verify evaluator-specific companion files exist
 //  1. Syntax check -- parse all policy files
 //  2. Contract check -- verify input.* references against CUE schema
 //  3. Test execution -- run policy unit tests
@@ -60,6 +66,20 @@ func Validate(ctx context.Context, contentDir string, eval evaluator.Evaluator, 
 	policyFiles, err := collectFiles(contentDir, ext)
 	if err != nil {
 		return nil, fmt.Errorf("collecting policy files: %w", err)
+	}
+
+	// Stage 0: Required files check — runs after directory access
+	// is confirmed but before policy file processing.
+	for _, reqFile := range eval.RequiredFiles() {
+		reqPath := filepath.Join(contentDir, reqFile)
+		if _, statErr := os.Stat(reqPath); errors.Is(statErr, os.ErrNotExist) {
+			result.MissingFiles = append(result.MissingFiles, reqFile)
+		} else if statErr != nil {
+			return nil, fmt.Errorf("checking required file %s: %w", reqFile, statErr)
+		}
+	}
+	if len(result.MissingFiles) > 0 {
+		return result, nil
 	}
 
 	if len(policyFiles) == 0 {

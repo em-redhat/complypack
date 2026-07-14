@@ -157,6 +157,12 @@ func TestOPA_FileExtension(t *testing.T) {
 	assert.Equal(t, ".rego", opa.FileExtension())
 }
 
+func TestOPA_RequiredFiles(t *testing.T) {
+	opa := &OPA{}
+	files := opa.RequiredFiles()
+	assert.Equal(t, []string{OPAMappingFile}, files)
+}
+
 func TestDefaultRegistry(t *testing.T) {
 	registry := DefaultRegistry()
 	require.NotNil(t, registry)

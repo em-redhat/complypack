@@ -254,6 +254,36 @@ func TestValidate_SingleSchemaInSlice(t *testing.T) {
 	assert.False(t, result.Valid())
 }
 
+func TestValidate_MissingRequiredFile(t *testing.T) {
+	ctx := context.Background()
+	eval := &evaluator.OPA{}
+	s := loadTestCUESchemaInline(t)
+
+	result, err := Validate(
+		ctx, "testdata/missing-mapping", eval, []cue.Value{s}, ValidationOptions{},
+	)
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"complytime-mapping.json"}, result.MissingFiles)
+	assert.Equal(t, 0, result.FilesChecked, "should not proceed to file checks")
+	assert.Empty(t, result.SyntaxErrors, "should not proceed to syntax checks")
+	assert.False(t, result.Valid())
+}
+
+func TestValidate_RequiredFilePresent(t *testing.T) {
+	ctx := context.Background()
+	eval := &evaluator.OPA{}
+	s := loadTestCUESchemaInline(t)
+
+	result, err := Validate(
+		ctx, "testdata/valid", eval, []cue.Value{s}, ValidationOptions{},
+	)
+	require.NoError(t, err)
+
+	assert.Empty(t, result.MissingFiles)
+	assert.True(t, result.Valid())
+}
+
 func TestCollectFiles(t *testing.T) {
 	files, err := collectFiles("testdata/valid", ".rego")
 	require.NoError(t, err)

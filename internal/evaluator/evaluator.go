@@ -31,6 +31,12 @@ type Evaluator interface {
 
 	// FileExtension returns the expected file extension for this evaluator's policies.
 	FileExtension() string
+
+	// RequiredFiles returns filenames that must exist in the content
+	// directory alongside policy files for this evaluator to function
+	// at scan time (e.g., "complytime-mapping.json" for OPA).
+	// Returns nil if no additional files are required.
+	RequiredFiles() []string
 }
 
 // ContractViolation represents a policy reference that doesn't exist in the schema.

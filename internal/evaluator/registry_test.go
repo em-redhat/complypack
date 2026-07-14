@@ -27,6 +27,7 @@ func (m *mockEvaluator) Test(ctx context.Context, files map[string]string) (*Tes
 }
 func (m *mockEvaluator) Lint(filename string, src string) ([]LintWarning, error) { return nil, nil }
 func (m *mockEvaluator) FileExtension() string                                   { return ".mock" }
+func (m *mockEvaluator) RequiredFiles() []string                                 { return nil }
 
 func TestNewRegistry(t *testing.T) {
 	r := NewRegistry()
