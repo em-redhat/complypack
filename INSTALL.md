@@ -189,6 +189,30 @@ Or use the setup command to generate it interactively:
 | `/comply-pack`     | Generate Rego policies from the child policy         |
 | `/comply-pipeline` | Run the comply pipeline (scoping, mapping, adherence)|
 
+## Lola (any AI assistant)
+
+Install the complypack module with [lola](https://lobstertrap.org/lola/):
+
+```bash
+lola mod add https://github.com/complytime/complypack.git
+lola install complypack -a opencode --scope project
+```
+
+This installs skills and commands into `.opencode/skills/` and
+`.opencode/commands/`. After installation, the `/comply-setup`,
+`/comply-pipeline`, and `/comply-pack` commands are available in OpenCode.
+
+To update after complypack releases new skills:
+
+```bash
+lola mod update complypack
+lola install complypack -a opencode --scope project
+```
+
+> **Note:** The MCP server still requires separate configuration. Run
+> `/comply-setup` after installation to generate the MCP config, or
+> edit `mcps.json` manually with your registry and schema values.
+
 ## SELinux (Fedora / RHEL)
 
 On systems with SELinux enforcing, volume mounts require the `:z` suffix so
