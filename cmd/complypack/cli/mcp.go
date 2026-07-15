@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/complytime/complypack/internal/cache"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/mcp"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -53,21 +53,17 @@ Example:
   # Or use flags directly (no config file needed):
   complypack mcp serve \
     --source oci://ghcr.io/org/catalog:v1 \
-    --schema kubernetes-deployment \
-    --schema ci-github-actions
+    --schema kubernetes \
+    --schema ci=cue://cue.dev/x/githubactions@v0#Workflow
 
 The server runs until interrupted (Ctrl+C) or the client disconnects.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			// Resolve cache directory
-			resolvedCacheDir := cacheDir
-			if resolvedCacheDir == "" {
-				homeDir, err := os.UserHomeDir()
-				if err != nil {
-					return fmt.Errorf("failed to get user home directory: %w", err)
-				}
-				resolvedCacheDir = filepath.Join(homeDir, ".complypack", "cache")
+			// Resolve cache directory using XDG_CACHE_HOME-aware resolution
+			resolvedCacheDir, err := cache.ResolveDir(cacheDir)
+			if err != nil {
+				return fmt.Errorf("failed to resolve cache directory: %w", err)
 			}
 
 			// Create MCP server options
@@ -104,9 +100,9 @@ The server runs until interrupted (Ctrl+C) or the client disconnects.`,
 	}
 
 	cmd.Flags().StringVarP(&configPath, "config", "c", "complypack.yaml", "Path to complypack.yaml config file")
-	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", "Cache directory (default: $HOME/.complypack/cache)")
+	cmd.Flags().StringVar(&cacheDir, "cache-dir", "", cache.CacheDirHelp)
 	cmd.Flags().StringArrayVar(&sources, "source", nil, "Gemara OCI source (repeatable, e.g. oci://ghcr.io/org/catalog:v1)")
-	cmd.Flags().StringArrayVar(&schemas, "schema", nil, "Platform schema (repeatable, e.g. kubernetes-deployment or ci-github-actions=cue://...)")
+	cmd.Flags().StringArrayVar(&schemas, "schema", nil, "Platform schema (repeatable, e.g. kubernetes or ci=cue://...)")
 
 	return cmd
 }
@@ -193,8 +189,8 @@ func writeStartupError(err error) {
 
 // parseSchemaFlags converts --schema flag values into SchemaRef values.
 //
-//   - "kubernetes-deployment"             -> SchemaRef{Platform: "kubernetes-deployment"} (index default)
-//   - "ci-github-actions=cue://cue.dev/x/githubactions@v0#Workflow" -> SchemaRef{Platform: "ci-github-actions", Source: "cue://..."}
+//   - "kubernetes"                        -> SchemaRef{Platform: "kubernetes"} (embedded)
+//   - "ci=cue://cue.dev/x/actions@v0"    -> SchemaRef{Platform: "ci", Source: "cue://..."}
 func parseSchemaFlags(schemas []string) ([]config.SchemaRef, error) {
 	if len(schemas) == 0 {
 		return nil, nil
