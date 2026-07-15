@@ -49,6 +49,7 @@ If no policy is loaded in the MCP server, proceed with all requested requirement
 
 Write policies against the platform schema contract, not sample inputs:
 
+- **Unique package namespace per file.** Each `.rego` file MUST declare a unique package namespace derived from the requirement (e.g., `package kubernetes.run_as_nonroot`). Do NOT use `package main`. The OPA provider passes this namespace as `conftest --namespace` for per-requirement evaluation — a shared namespace makes individual requirement evaluation impossible. Test files (`_test.rego`) must use the same package as their corresponding policy file. The namespace must be a valid Rego identifier — each dot-separated segment must start with a letter and contain only letters, digits, and underscores (e.g., replace hyphens with underscores).
 - **Write `input.*` paths from the schema.** Read `complypack://schema/*` and use the paths it defines. Do NOT reverse-engineer paths from sample manifests in `targets/`.
 - **No hardcoded values from test data.** Do not embed names, image refs, step names, or other values from sample inputs. Use parameter values from `get_assessment_requirements` for thresholds and accepted values.
 - **One file per assessment requirement.** Name the file after the requirement (e.g., `run_as_nonroot.rego`).
@@ -183,3 +184,4 @@ Generate one JSON file per assessment requirement (granular policy), then merge 
 - [ ] Did you call `get_automation_triage` to determine which plans are automated?
 - [ ] Did you generate the provider-specific mapping file (`complytime-mapping.json` for OPA, `complytime-ampel-policy.json` for Ampel)?
 - [ ] Did you avoid modifying approved test cases to make the policy pass?
+- [ ] Does every `.rego` file declare a unique package namespace (not `package main`)?

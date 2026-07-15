@@ -38,6 +38,7 @@ For each requirement, generate:
 
 ### Rules
 
+- Each test file MUST declare a unique package namespace derived from the requirement (e.g., `package kubernetes.run_as_nonroot`). Do NOT use `package main` or a shared name like `package policy`. The test file and its corresponding policy file must share the same package namespace — the OPA provider uses it as `conftest --namespace` for per-requirement evaluation. The namespace must be a valid Rego identifier — each dot-separated segment must start with a letter and contain only letters, digits, and underscores (e.g., replace hyphens with underscores).
 - Use `with input as {...}` to provide inline test data
 - Test data JSON must use `input.*` paths from the platform schema
 - Parameter values come from `get_assessment_requirements`, not from sample data
@@ -49,7 +50,7 @@ For each requirement, generate:
 For a requirement "containers must not run as root" with platform `kubernetes-pod`:
 
 ```rego
-package policy
+package kubernetes.run_as_nonroot
 
 import rego.v1
 
@@ -105,3 +106,4 @@ When pack-assessment runs `test_policy`, it combines the policy and test content
 - [ ] `input.*` paths in test data do not exist in the platform schema → **STOP.** Fix paths to match `complypack://schema/*`.
 - [ ] Approved test cases were modified to make policy pass → **STOP.** Revert the tests. Fix the policy instead.
 - [ ] Missing a deny or allow test for a requirement → **STOP.** Add the missing test case before proceeding.
+- [ ] Multiple test files share the same package namespace (e.g., all use `package main` or `package policy`) → **STOP.** Each must declare a unique namespace derived from the requirement.
