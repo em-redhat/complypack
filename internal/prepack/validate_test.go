@@ -4,6 +4,8 @@ package prepack
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"cuelang.org/go/cue"
@@ -251,6 +253,62 @@ func TestValidate_SingleSchemaInSlice(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotEmpty(t, result.ContractViolations, "single schema should still catch violations")
+	assert.False(t, result.Valid())
+}
+
+// multiFileEvaluator is a mock that declares multiple required companion
+// files, used to verify the Stage 0 loop reports only missing entries.
+type multiFileEvaluator struct {
+	evaluator.OPA
+	requiredFiles []string
+}
+
+func (m *multiFileEvaluator) RequiredFiles() []string {
+	return m.requiredFiles
+}
+
+func TestValidate_MultipleRequiredFiles_PartialPresence(t *testing.T) {
+	ctx := context.Background()
+	s := loadTestCUESchemaInline(t)
+
+	// Build a temp content directory with one required file present
+	// and one absent, plus a valid policy file.
+	contentDir := t.TempDir()
+	presentFile := "file-a.json"
+	absentFile := "file-b.json"
+
+	err := os.WriteFile(
+		filepath.Join(contentDir, presentFile),
+		[]byte(`{}`), 0o600,
+	)
+	require.NoError(t, err)
+
+	err = os.WriteFile(
+		filepath.Join(contentDir, "policy.rego"),
+		[]byte("package main\nimport rego.v1\n\ndeny contains msg if {\n"+
+			"\tinput.kind == \"Pod\"\n\tmsg := \"test\"\n}\n"),
+		0o600,
+	)
+	require.NoError(t, err)
+
+	eval := &multiFileEvaluator{
+		requiredFiles: []string{presentFile, absentFile},
+	}
+
+	result, err := Validate(
+		ctx, contentDir, eval, []cue.Value{s}, ValidationOptions{},
+	)
+	require.NoError(t, err)
+
+	assert.Equal(
+		t, []string{absentFile}, result.MissingFiles,
+		"only the absent file should appear in MissingFiles",
+	)
+	assert.Equal(
+		t, 0, result.FilesChecked,
+		"should not proceed to policy file checks",
+	)
+	assert.Empty(t, result.SyntaxErrors, "should not proceed to syntax checks")
 	assert.False(t, result.Valid())
 }
 
