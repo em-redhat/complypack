@@ -3,7 +3,7 @@ module github.com/complytime/complypack
 go 1.26
 
 require (
-	cuelang.org/go v0.17.0
+	cuelang.org/go v0.17.1
 	github.com/charmbracelet/huh v1.0.0
 	github.com/gemaraproj/go-gemara v0.8.0
 	github.com/goccy/go-yaml v1.19.2
