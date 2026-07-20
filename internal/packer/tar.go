@@ -43,6 +43,11 @@ func TarGzipDir(dir string) (io.Reader, error) {
 			return nil
 		}
 
+		// Skip OPA test files — convention is *_test.rego
+		if !d.IsDir() && strings.HasSuffix(d.Name(), "_test.rego") {
+			return nil
+		}
+
 		info, err := d.Info()
 		if err != nil {
 			return err

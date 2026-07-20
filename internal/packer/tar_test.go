@@ -45,6 +45,21 @@ func TestTarGzipDir(t *testing.T) {
 		assert.NotContains(t, files, ".git/config")
 	})
 
+	t.Run("excludes test rego files", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "policy.rego"), []byte("package main"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "policy_test.rego"), []byte("package main"), 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "complytime-mapping.json"), []byte("{}"), 0600))
+
+		reader, err := TarGzipDir(dir)
+		require.NoError(t, err)
+
+		files := extractTarGz(t, reader)
+		assert.Contains(t, files, "policy.rego")
+		assert.Contains(t, files, "complytime-mapping.json")
+		assert.NotContains(t, files, "policy_test.rego")
+	})
+
 	t.Run("errors on non-directory", func(t *testing.T) {
 		f := filepath.Join(t.TempDir(), "file.txt")
 		require.NoError(t, os.WriteFile(f, []byte("text"), 0600))

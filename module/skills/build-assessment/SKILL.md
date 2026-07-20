@@ -126,6 +126,10 @@ This is a soft gate. If the user selects "Want changes", revise the policy, re-r
 
 Loop back to **Pause 1** for the next requirement.
 
+### After Loop: Generate Provider Mapping File
+
+After all requirements are processed and policies written, generate the mapping file. See **Step 2: Generate Provider Mapping File** below.
+
 ## Batch Mode
 
 Process all requirements at once in two phases.
@@ -164,6 +168,49 @@ Process all requirements at once in two phases.
    - options: "Approve all" (write to disk) / "Want changes" (I'll list which ones to revise)
 5. If the user wants changes to specific policies, revise, re-test, re-present
 6. Write all passing policies to `policy/*.rego`
+7. Generate the provider mapping file — see **Step 2: Generate Provider Mapping File** below
+
+## Step 2: Generate Provider Mapping File
+
+After all policy files are written to disk (in either single or batch mode), generate the mapping file that links assessment plan requirement IDs to their generated policy files. The file format depends on the configured `evaluator-id` in `complypack.yaml`. This file is bundled with the policy files when published as a ComplyPack OCI artifact.
+
+**Important:** Only `.rego` policy files and the mapping file are included in the published bundle. `*_test.rego` files are automatically excluded from bundles by the packer — do not include them in the mapping.
+
+### OPA provider (`evaluator-id: opa`) — `complytime-mapping.json`
+
+Maps Gemara Policy assessment plan requirement IDs to the Rego package namespaces of the generated checks. The opa-provider uses this file at scan time to match incoming assessment configurations to the correct Rego policies.
+
+**Build the mapping from existing rego files.** Before generating, scan the policy output directory (e.g., `policy/`) for `.rego` files (excluding `*_test.rego`) and read the `package` declaration from each one. Use these actual package namespaces as the `id` values — do not invent or assume namespaces.
+
+1. List all `.rego` files in the policy directory (skip `*_test.rego` files)
+2. For each file, extract the `package` declaration (e.g., `package kubernetes.tls_version`)
+3. Match each package namespace to its corresponding `requirement-id` from the Policy's `adherence.assessment-plans`
+4. Write the mapping file
+
+```json
+{
+  "version": "1",
+  "mappings": [
+    {
+      "id": "kubernetes.tls_version",
+      "requirement_id": "CTL-TLS-001-AR1"
+    },
+    {
+      "id": "kubernetes.tls_ciphers",
+      "requirement_id": "CTL-TLS-001-AR2"
+    }
+  ]
+}
+```
+
+- `id` — the Rego `package` namespace declared in the `.rego` file (e.g., `package kubernetes.tls_version` → `"kubernetes.tls_version"`)
+- `requirement_id` — the Gemara requirement-id from `adherence.assessment-plans[].requirement-id` in the Policy
+- One entry per rego file; no duplicates in either field
+- Write to `complytime-mapping.json` in the policy output directory alongside the `.rego` files
+
+### Ampel provider (`evaluator-id: ampel`) — `complytime-ampel-policy.json`
+
+Generate one JSON file per assessment requirement (granular policy), then merge them into a single `complytime-ampel-policy.json` bundle. See `comply:pack-assessment` for the full Ampel schema specification.
 
 ## MCP Resources and Tools
 
@@ -187,3 +234,5 @@ Process all requirements at once in two phases.
 - [ ] User has not approved test scenarios (single mode) — **STOP.** Wait for approval.
 - [ ] `validate_policy` not run before `test_policy` — **STOP.** Contract check first.
 - [ ] Multiple `.rego` files share the same package namespace (e.g., all use `package main`) — **STOP.** Each file must declare a unique namespace for per-requirement conftest evaluation.
+- [ ] Missing `complytime-mapping.json` (OPA) or `complytime-ampel-policy.json` (Ampel) — **STOP.** Generate the provider mapping file before packing.
+- [ ] `complytime-mapping.json` uses invented namespaces instead of actual `package` declarations from `.rego` files — **STOP.** Scan the files and extract real namespaces.
