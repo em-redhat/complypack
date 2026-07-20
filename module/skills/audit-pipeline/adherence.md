@@ -36,6 +36,10 @@ From the delta report's `sources`, build `mapping_references`:
 > against loaded sources. Short aliases pass Gemara schema validation but
 > fail at complypack runtime with:
 > `failed to resolve effective policy: no imports could be resolved`
+>
+> DO NOT include a `url` field in mapping references. ComplyPack resolves
+> artifacts by `id` alone and local `file://` paths become broken
+> references after OCI packaging.
 
 ### Step 3: Build Imports
 
@@ -158,7 +162,32 @@ Use `scope.in.groups` for applicability groups from the scoping stage (e.g., mat
 
 ### Step 6: Validate
 
-Write `.complytime/child-policy.yaml`. If the Gemara MCP server is available, validate against the schema with the Policy definition.
+Write `.complytime/child-policy.yaml`, then run both validation phases below.
+
+#### Step 6a: Structural validation (rubric)
+
+Spawn a context-isolated subagent to validate the compiled Policy against
+the rubric in `policy-validation-rubric.md`. The subagent receives ONLY
+the contents of `.complytime/child-policy.yaml` and the rubric — no delta
+report, no MCP resources, and no conversation history.
+
+If the host does not support context-isolated subagent dispatch, perform
+the rubric checks inline and emit a warning that context isolation was not
+achieved. Inline execution is a degraded mode — the checks still run, but
+the isolation guarantee against `url` hallucination from conversation
+context does not hold.
+
+If the subagent returns ALL CHECKS PASSED, proceed to Step 6b.
+
+If the subagent returns any FAIL findings, fix every issue in the Policy
+YAML and re-run Step 6a. Re-run a maximum of 3 times. If failures persist
+after 3 attempts, present the remaining failures to the user and request
+manual correction (per AGENTS.md: "Third failure: STOP AND ASK").
+
+#### Step 6b: Schema validation (optional)
+
+If the Gemara MCP server is available, validate `.complytime/child-policy.yaml`
+against the schema with the Policy definition.
 
 ### Step 7: Present Summary
 
@@ -193,3 +222,4 @@ Invoke /comply:build-assessment to generate assessment logic for the 8 automated
 - [ ] Does `adherence.evaluation-methods` have an executor with the user-identified trusted evaluator?
 - [ ] Did you ask the user to identify the trusted evaluator?
 - [ ] Did you present the triage results and ask if any plans need a different evaluator or mode?
+- [ ] Any mapping reference includes a `url` field? Remove it.

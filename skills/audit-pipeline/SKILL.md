@@ -42,6 +42,10 @@ Read the stage instructions from this skill's base directory before proceeding:
 - **mapping** → `mapping.md`
 - **adherence** → `adherence.md`
 
+## Supporting Files
+
+- **policy-validation-rubric.md** — Structural validation rubric for compiled Policy YAML (consumed by Step 6a of adherence)
+
 ## Status Display
 
 ```text
