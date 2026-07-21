@@ -128,7 +128,7 @@ Loop back to **Pause 1** for the next requirement.
 
 ### After Loop: Generate Provider Mapping File
 
-After all requirements are processed and policies written, generate the mapping file. See **Step 2: Generate Provider Mapping File** below.
+After all requirements are processed and policies written, generate the mapping file. See **Generate Provider Mapping File** below.
 
 ## Batch Mode
 
@@ -168,9 +168,9 @@ Process all requirements at once in two phases.
    - options: "Approve all" (write to disk) / "Want changes" (I'll list which ones to revise)
 5. If the user wants changes to specific policies, revise, re-test, re-present
 6. Write all passing policies to `policy/*.rego`
-7. Generate the provider mapping file — see **Step 2: Generate Provider Mapping File** below
+7. Generate the provider mapping file — see **Generate Provider Mapping File** below
 
-## Step 2: Generate Provider Mapping File
+## Generate Provider Mapping File
 
 After all policy files are written to disk (in either single or batch mode), generate the mapping file that links assessment plan requirement IDs to their generated policy files. The file format depends on the configured `evaluator-id` in `complypack.yaml`. This file is bundled with the policy files when published as a ComplyPack OCI artifact.
 
@@ -210,7 +210,60 @@ Maps Gemara Policy assessment plan requirement IDs to the Rego package namespace
 
 ### Ampel provider (`evaluator-id: ampel`) — `complytime-ampel-policy.json`
 
-Generate one JSON file per assessment requirement (granular policy), then merge them into a single `complytime-ampel-policy.json` bundle. See `comply:pack-assessment` for the full Ampel schema specification.
+Generate one JSON file per assessment requirement (granular policy), then merge them into a single `complytime-ampel-policy.json` bundle.
+
+**Granular policy file** (one per requirement, e.g., `require-pull-request.json`):
+
+```json
+{
+  "id": "require-pull-request",
+  "meta": {
+    "description": "Validate branch protection settings require pull/merge requests",
+    "controls": [
+      {
+        "framework": "repo-branch-protection",
+        "class": "source-code",
+        "id": "pull-request-enforcement"
+      }
+    ]
+  },
+  "tenets": [
+    {
+      "id": "01",
+      "code": "<CEL expression>",
+      "predicates": {
+        "types": ["<attestation predicate type URI>"]
+      },
+      "assessment": {
+        "message": "Direct pushes are disabled. Pull/Merge requests required."
+      },
+      "error": {
+        "message": "Direct pushes are enabled so Pull/Merge requests are not required.",
+        "guidance": "Create a branch ruleset and enable 'Restrict updates'."
+      }
+    }
+  ]
+}
+```
+
+**Merged bundle** (`complytime-ampel-policy.json`):
+
+```json
+{
+  "id": "complytime-ampel-policy",
+  "meta": {
+    "frameworks": [
+      { "id": "ComplyTime-AMPEL-Policy", "name": "ComplyTime AMPEL Policy" }
+    ]
+  },
+  "policies": [ /* all granular policies merged here */ ]
+}
+```
+
+- `id` in each granular policy is the policy's semantic identity, matched against the Gemara requirement-id at scan time
+- `tenets[].code` contains CEL expressions evaluated against attestation predicates
+- `tenets[].predicates.types` lists the attestation predicate type URIs the tenet evaluates
+- Write granular files to the policy output directory, then merge into `complytime-ampel-policy.json`
 
 ## MCP Resources and Tools
 
