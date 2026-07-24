@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/complytime/complypack/internal/cache"
 	"github.com/complytime/complypack/internal/config"
 	"github.com/complytime/complypack/internal/coverage"
@@ -17,6 +18,17 @@ import (
 	"github.com/complytime/complypack/internal/requirement"
 	"github.com/complytime/complypack/internal/source"
 	"github.com/spf13/cobra"
+)
+
+var (
+	styleTitle   = lipgloss.NewStyle().Bold(true)
+	styleControl = lipgloss.NewStyle().Bold(true)
+	stylePass    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	styleFail    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	styleGap     = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	styleOK      = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	styleWarn    = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	styleDim     = lipgloss.NewStyle().Faint(true)
 )
 
 func coverageCmd() *cobra.Command {
@@ -191,10 +203,9 @@ func writeJSON(w io.Writer, report *coverage.Report) error {
 
 // writeText formats the report as human-readable text grouped by control.
 func writeText(w io.Writer, report *coverage.Report) error {
-	fmt.Fprintf(w, "Coverage Report: %s\n", report.PolicyID)
-	fmt.Fprintln(w, strings.Repeat("=", 50))
+	fmt.Fprintln(w, styleTitle.Render(fmt.Sprintf("Coverage Report: %s", report.PolicyID)))
+	fmt.Fprintln(w, styleDim.Render(strings.Repeat("━", 50)))
 
-	// Group requirements by control
 	type controlGroup struct {
 		controlID    string
 		requirements []coverage.RequirementEntry
@@ -217,55 +228,67 @@ func writeText(w io.Writer, report *coverage.Report) error {
 
 	for _, cid := range groupOrder {
 		g := groupMap[cid]
-		fmt.Fprintf(w, "\n  %s\n", g.controlID)
+		fmt.Fprintf(w, "\n  %s\n", styleControl.Render(g.controlID))
 		for _, req := range g.requirements {
-			indicator := statusIndicator(req.Status)
-			fmt.Fprintf(w, "    %s %s\n", indicator, req.RequirementID)
+			fmt.Fprintf(w, "    %s %s\n", statusIndicator(req.Status), req.RequirementID)
 		}
 	}
 
-	// Warnings
 	if len(report.Warnings) > 0 {
-		fmt.Fprintln(w, "")
+		fmt.Fprintln(w)
 		for _, warn := range report.Warnings {
-			fmt.Fprintf(w, "  WARNING: %s\n", warn.Message)
+			fmt.Fprintf(w, "  %s %s\n", styleWarn.Render("⚠"), warn.Message)
 		}
 	}
 
-	// Manual requirements
 	if len(report.Manual) > 0 {
-		fmt.Fprintf(w, "\n  Manual requirements (excluded from coverage): %d\n", len(report.Manual))
+		fmt.Fprintf(w, "\n  %s\n",
+			styleDim.Render(fmt.Sprintf("Manual requirements (excluded from coverage): %d", len(report.Manual))))
 	}
 
-	// Summary
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, strings.Repeat("-", 50))
-	fmt.Fprintf(w, "  %d/%d requirements covered (%.1f%%)\n",
-		report.Metrics.Implemented, report.Metrics.TotalAutomated,
-		report.Metrics.CoveragePercent)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, styleDim.Render(strings.Repeat("─", 50)))
+
+	covStyle := coverageStyle(report.Metrics.CoveragePercent)
+	fmt.Fprintf(w, "  %s\n", covStyle.Render(
+		fmt.Sprintf("%d/%d requirements covered (%.1f%%)",
+			report.Metrics.Implemented, report.Metrics.TotalAutomated,
+			report.Metrics.CoveragePercent)))
 	if report.Metrics.Passing > 0 || report.Metrics.Failing > 0 {
-		fmt.Fprintf(w, "  Passing: %d  Failing: %d\n",
-			report.Metrics.Passing, report.Metrics.Failing)
+		fmt.Fprintf(w, "  %s: %d  %s: %d\n",
+			stylePass.Render("Passing"), report.Metrics.Passing,
+			styleFail.Render("Failing"), report.Metrics.Failing)
 	}
 	if report.Metrics.Gaps > 0 {
-		fmt.Fprintf(w, "  Gaps: %d\n", report.Metrics.Gaps)
+		fmt.Fprintf(w, "  %s: %d\n", styleGap.Render("Gaps"), report.Metrics.Gaps)
 	}
 
 	return nil
 }
 
-// statusIndicator returns a text indicator for a requirement status.
+// statusIndicator returns a styled text indicator for a requirement status.
 func statusIndicator(status coverage.RequirementStatus) string {
 	switch status {
 	case coverage.StatusImplementedPassing:
-		return "[PASS]"
+		return stylePass.Render("✓ PASS")
 	case coverage.StatusImplementedFailing:
-		return "[FAIL]"
+		return styleFail.Render("✗ FAIL")
 	case coverage.StatusImplemented:
-		return "[ OK ]"
+		return styleOK.Render("● OK  ")
 	case coverage.StatusGap:
-		return "[ -- ]"
+		return styleGap.Render("○ GAP ")
 	default:
-		return "[    ]"
+		return styleDim.Render("  ?   ")
+	}
+}
+
+func coverageStyle(pct float64) lipgloss.Style {
+	switch {
+	case pct >= 80:
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
+	case pct >= 50:
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
+	default:
+		return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("196"))
 	}
 }

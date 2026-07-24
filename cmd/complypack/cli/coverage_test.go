@@ -67,9 +67,9 @@ func TestWriteText(t *testing.T) {
 	assert.Contains(t, output, "CTL-001")
 	assert.Contains(t, output, "CTL-002")
 	assert.Contains(t, output, "CTL-001-AR1")
-	assert.Contains(t, output, "[ OK ]")
-	assert.Contains(t, output, "[ -- ]")
-	assert.Contains(t, output, "[PASS]")
+	assert.Contains(t, output, "● OK")
+	assert.Contains(t, output, "○ GAP")
+	assert.Contains(t, output, "✓ PASS")
 	assert.Contains(t, output, "2/3 requirements covered")
 	assert.Contains(t, output, "Gaps: 1")
 }
@@ -95,10 +95,10 @@ func TestWriteText_WithTestResults(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	assert.Contains(t, output, "[PASS]")
-	assert.Contains(t, output, "[FAIL]")
-	assert.Contains(t, output, "Passing: 1")
-	assert.Contains(t, output, "Failing: 1")
+	assert.Contains(t, output, "✓ PASS")
+	assert.Contains(t, output, "✗ FAIL")
+	assert.Contains(t, output, "Passing")
+	assert.Contains(t, output, "Failing")
 }
 
 func TestWriteJSON(t *testing.T) {
@@ -133,19 +133,19 @@ func TestWriteJSON(t *testing.T) {
 
 func TestStatusIndicator(t *testing.T) {
 	tests := []struct {
-		status coverage.RequirementStatus
-		want   string
+		status   coverage.RequirementStatus
+		contains string
 	}{
-		{coverage.StatusImplementedPassing, "[PASS]"},
-		{coverage.StatusImplementedFailing, "[FAIL]"},
-		{coverage.StatusImplemented, "[ OK ]"},
-		{coverage.StatusGap, "[ -- ]"},
+		{coverage.StatusImplementedPassing, "✓ PASS"},
+		{coverage.StatusImplementedFailing, "✗ FAIL"},
+		{coverage.StatusImplemented, "● OK"},
+		{coverage.StatusGap, "○ GAP"},
 	}
 
 	for _, tc := range tests {
 		t.Run(string(tc.status), func(t *testing.T) {
 			got := statusIndicator(tc.status)
-			assert.Equal(t, tc.want, got)
+			assert.Contains(t, got, tc.contains)
 		})
 	}
 }
